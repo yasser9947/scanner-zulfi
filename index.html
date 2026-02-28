@@ -52,7 +52,7 @@
         .app-layout {
             display: grid;
             grid-template-columns: 400px 1fr;
-            grid-template-rows: auto 1fr;
+            grid-template-rows: auto 1fr auto;
             height: 100vh;
             position: relative;
             z-index: 1;
@@ -102,6 +102,30 @@
             50% { opacity: 0.5; transform: scale(1.5); }
         }
 
+        /* Footer */
+        .footer {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 24px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        .footer-highlight {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .footer-separator {
+            color: var(--text-dim);
+            opacity: 0.3;
+        }
+
         .sidebar {
             background: var(--bg-secondary);
             border-left: 1px solid var(--border);
@@ -124,7 +148,7 @@
             background: linear-gradient(135deg, var(--bg-card), rgba(59, 130, 246, 0.05));
             border: 1px solid rgba(59, 130, 246, 0.2);
             border-radius: 14px; padding: 16px;
-            position: relative; overflow: hidden;
+            position: relative; overflow: visible;
         }
 
         .city-search-card::before {
@@ -179,15 +203,26 @@
         .search-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px var(--blue-glow); }
         .search-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
+        /* FIX #4: Search results always visible and properly positioned */
         .search-results {
-            position: absolute; top: calc(100%); left: 0; right: 0;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 10px; margin-top: 6px;
-            max-height: 250px; overflow-y: auto; z-index: 100;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.5); display: none;
+            position: absolute;
+            top: 100%;
+            left: 0; right: 0;
+            background: var(--bg-card);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 10px;
+            margin-top: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+            z-index: 9999;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.7);
+            display: none;
         }
 
-        .search-results.visible { display: block; animation: dropIn 0.2s ease-out; }
+        .search-results.visible {
+            display: block !important;
+            animation: dropIn 0.25s ease-out;
+        }
 
         @keyframes dropIn {
             from { opacity: 0; transform: translateY(-8px); }
@@ -195,7 +230,7 @@
         }
 
         .search-result-item {
-            padding: 10px 14px; cursor: pointer;
+            padding: 12px 14px; cursor: pointer;
             border-bottom: 1px solid var(--border);
             transition: background 0.15s;
             display: flex; align-items: center; gap: 10px;
@@ -203,9 +238,9 @@
 
         .search-result-item:last-child { border-bottom: none; }
         .search-result-item:hover { background: var(--bg-card-hover); }
-        .search-result-item .sr-icon { font-size: 18px; min-width: 24px; text-align: center; }
-        .search-result-item .sr-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
-        .search-result-item .sr-detail { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+        .search-result-item .sr-icon { font-size: 20px; min-width: 28px; text-align: center; }
+        .search-result-item .sr-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+        .search-result-item .sr-detail { font-size: 12px; color: var(--text-secondary); margin-top: 2px; line-height: 1.4; }
 
         .active-city {
             display: none; align-items: center; gap: 8px;
@@ -232,23 +267,6 @@
         .or-divider::before, .or-divider::after {
             content: ''; flex: 1; height: 1px; background: var(--border);
         }
-
-        .instructions-card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 12px; padding: 16px;
-        }
-
-        .step { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; }
-        .step + .step { border-top: 1px solid var(--border); }
-
-        .step-num {
-            width: 24px; height: 24px; min-width: 24px;
-            background: var(--accent-dim); color: var(--accent); border-radius: 6px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
-        }
-
-        .step-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
 
         .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
@@ -348,6 +366,32 @@
             font-family: 'JetBrains Mono', monospace; font-size: 11px;
             color: var(--text-dim); background: var(--bg-primary);
             padding: 6px 10px; border-radius: 6px; display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        /* FIX #2: Google Maps link button */
+        .gmaps-link {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 6px 12px;
+            background: rgba(66, 133, 244, 0.1);
+            border: 1px solid rgba(66, 133, 244, 0.3);
+            border-radius: 8px;
+            color: #4285f4;
+            font-family: 'Cairo', sans-serif;
+            font-size: 12px; font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .gmaps-link:hover {
+            background: rgba(66, 133, 244, 0.2);
+            border-color: #4285f4;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.2);
+        }
+
+        .gmaps-link img {
+            width: 16px; height: 16px;
         }
 
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -406,7 +450,6 @@
 
         .custom-popup .leaflet-popup-tip { background: var(--bg-card); border: 1px solid var(--border); }
         .popup-content { padding: 4px; text-align: center; }
-
         .popup-elev { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; }
         .popup-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
@@ -457,9 +500,10 @@
         .city-quick-scan:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
         @media (max-width: 768px) {
-            .app-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
+            .app-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto auto; }
             .sidebar { order: 3; max-height: 40vh; border-left: none; border-top: 1px solid var(--border); }
             .map-container { order: 2; min-height: 50vh; }
+            .footer { order: 4; }
         }
 
         .spinner {
@@ -500,7 +544,7 @@
                         ابحث عن مدينة
                     </div>
                     <div class="search-input-wrapper">
-                        <input type="text" class="search-input" id="city-input" placeholder="مثال: الرياض، جدة، أبها..." autocomplete="off">
+                        <input type="text" class="search-input" id="city-input" placeholder="مثال: الرياض، الزلفي، أبها..." autocomplete="off">
                         <button class="search-btn" id="city-search-btn" onclick="searchCity()">بحث</button>
                         <div class="search-results" id="search-results"></div>
                     </div>
@@ -569,6 +613,15 @@
                 </div>
             </div>
         </div>
+
+        <!-- FIX #3: Developer credit footer -->
+        <footer class="footer">
+            <span>⛰️</span>
+            <span>تطوير</span>
+            <span class="footer-highlight">عائلة المحترش وعذا</span>
+            <span class="footer-separator">|</span>
+            <span>ماسح الارتفاعات v2.0</span>
+        </footer>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -578,6 +631,7 @@
         let currentShape = null;
         let cityBoundaryLayer = null;
         let cityLabelMarker = null;
+        let cityGeoJSON = null; // FIX #1: Store the actual city polygon for point-in-polygon checks
         let scanMarkers = [];
         let highMarker = null, lowMarker = null;
         let density = 10;
@@ -610,13 +664,14 @@
                 drawnItems.clearLayers();
                 clearMarkers();
                 currentShape = e.layer;
+                cityGeoJSON = null;
                 drawnItems.addLayer(currentShape);
                 document.getElementById('btn-scan').disabled = false;
                 document.getElementById('map-hint').style.display = 'none';
             });
 
             map.on(L.Draw.Event.DELETED, function () {
-                currentShape = null;
+                currentShape = null; cityGeoJSON = null;
                 document.getElementById('btn-scan').disabled = true;
                 clearMarkers(); hideResults();
             });
@@ -625,10 +680,11 @@
                 if (e.key === 'Enter') searchCity();
             });
 
+            // FIX #4: Only close results when clicking outside the entire search card
             document.addEventListener('click', function(e) {
-                const r = document.getElementById('search-results');
-                if (!r.contains(e.target) && e.target !== document.getElementById('city-input')) {
-                    r.classList.remove('visible');
+                const card = document.querySelector('.city-search-card');
+                if (!card.contains(e.target)) {
+                    document.getElementById('search-results').classList.remove('visible');
                 }
             });
         }
@@ -656,12 +712,18 @@
                     return;
                 }
 
+                // FIX #4: Results displayed clearly with better styling
                 resultsDiv.innerHTML = data.map((item, i) => {
                     const icon = item.type === 'city' || item.type === 'town' ? '🏙️' : item.type === 'village' ? '🏘️' : item.type === 'state' ? '🗺️' : item.type === 'country' ? '🌍' : '📍';
-                    const name = item.display_name.split(',').slice(0, 3).join('، ');
+                    const nameParts = item.display_name.split(',');
+                    const mainName = item.name || query;
+                    const detail = nameParts.slice(1, 4).join('، ').trim();
                     return `<div class="search-result-item" onclick="selectCityResult(${i})">
                         <span class="sr-icon">${icon}</span>
-                        <div><div class="sr-name">${item.name || query}</div><div class="sr-detail">${name}</div></div>
+                        <div>
+                            <div class="sr-name">${mainName}</div>
+                            <div class="sr-detail">${detail}</div>
+                        </div>
                     </div>`;
                 }).join('');
 
@@ -689,12 +751,16 @@
                 L.latLng(parseFloat(bbox[1]), parseFloat(bbox[3]))
             );
 
+            // FIX #1: Use actual city polygon for scanning, not just bbox
             if (item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon')) {
+                cityGeoJSON = item.geojson;
                 cityBoundaryLayer = L.geoJSON(item.geojson, {
                     style: { color: '#3b82f6', fillColor: 'rgba(59,130,246,0.08)', weight: 2.5, dashArray: '8, 4', fillOpacity: 0.15 }
                 }).addTo(map);
+                // We still need a rectangle for grid generation bounds, but filtering happens via polygon
                 currentShape = L.rectangle(bounds, { color: 'transparent', fillColor: 'transparent', weight: 0 });
             } else {
+                cityGeoJSON = null;
                 currentShape = L.rectangle(bounds, { color: '#3b82f6', fillColor: 'rgba(59,130,246,0.08)', weight: 2, dashArray: '8, 4' });
                 drawnItems.addLayer(currentShape);
             }
@@ -717,7 +783,7 @@
         }
 
         function clearCitySelection() {
-            selectedCity = null;
+            selectedCity = null; cityGeoJSON = null;
             if (cityBoundaryLayer) { map.removeLayer(cityBoundaryLayer); cityBoundaryLayer = null; }
             if (cityLabelMarker) { map.removeLayer(cityLabelMarker); cityLabelMarker = null; }
             document.getElementById('active-city').classList.remove('visible');
@@ -735,7 +801,7 @@
 
         function clearAll() {
             drawnItems.clearLayers(); clearMarkers(); clearCitySelection();
-            currentShape = null;
+            currentShape = null; cityGeoJSON = null;
             document.getElementById('btn-scan').disabled = true;
             document.getElementById('map-hint').style.display = 'flex';
             document.getElementById('heatmap-legend').classList.remove('visible');
@@ -761,6 +827,38 @@
             document.getElementById('density-display').textContent = `${val} × ${val}`;
         }
 
+        // FIX #1: Point-in-GeoJSON polygon check (ray casting for actual city boundaries)
+        function isPointInGeoJSON(lat, lng, geojson) {
+            if (geojson.type === 'Polygon') {
+                return isPointInRings(lat, lng, geojson.coordinates);
+            } else if (geojson.type === 'MultiPolygon') {
+                return geojson.coordinates.some(polygon => isPointInRings(lat, lng, polygon));
+            }
+            return false;
+        }
+
+        function isPointInRings(lat, lng, rings) {
+            // Check outer ring (must be inside)
+            if (!isPointInRing(lat, lng, rings[0])) return false;
+            // Check holes (must NOT be inside any hole)
+            for (let i = 1; i < rings.length; i++) {
+                if (isPointInRing(lat, lng, rings[i])) return false;
+            }
+            return true;
+        }
+
+        function isPointInRing(lat, lng, ring) {
+            let inside = false;
+            for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+                // GeoJSON coordinates are [lng, lat]
+                const xi = ring[i][1], yi = ring[i][0];
+                const xj = ring[j][1], yj = ring[j][0];
+                const intersect = ((yi > lng) !== (yj > lng)) && (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
         function generateGridPoints(bounds, n) {
             const points = [];
             const s = bounds.getSouth(), no = bounds.getNorth(), w = bounds.getWest(), e = bounds.getEast();
@@ -768,8 +866,16 @@
             for (let i = 0; i < n; i++) {
                 for (let j = 0; j < n; j++) {
                     const lat = s + i * latStep, lng = w + j * lngStep;
-                    if (currentShape instanceof L.Polygon && !(currentShape instanceof L.Rectangle)) {
-                        if (isPointInPolygon(L.latLng(lat, lng), currentShape)) points.push({ latitude: lat, longitude: lng });
+
+                    // FIX #1: If we have city GeoJSON, filter points to be within actual city boundary
+                    if (cityGeoJSON) {
+                        if (isPointInGeoJSON(lat, lng, cityGeoJSON)) {
+                            points.push({ latitude: lat, longitude: lng });
+                        }
+                    } else if (currentShape instanceof L.Polygon && !(currentShape instanceof L.Rectangle)) {
+                        if (isPointInLeafletPolygon(L.latLng(lat, lng), currentShape)) {
+                            points.push({ latitude: lat, longitude: lng });
+                        }
                     } else {
                         points.push({ latitude: lat, longitude: lng });
                     }
@@ -778,7 +884,7 @@
             return points;
         }
 
-        function isPointInPolygon(point, polygon) {
+        function isPointInLeafletPolygon(point, polygon) {
             const ll = polygon.getLatLngs()[0]; let inside = false;
             const x = point.lat, y = point.lng;
             for (let i = 0, j = ll.length - 1; i < ll.length; j = i++) {
@@ -824,6 +930,11 @@
             if (ratio < 0.5) { const t = ratio * 2; r = 255; g = Math.round(71 + 144 * t); b = Math.round(87 * (1 - t)); }
             else { const t = (ratio - 0.5) * 2; r = Math.round(255 * (1 - t)); g = Math.round(215 + 14 * t); b = Math.round(160 * t); }
             return `rgb(${r},${g},${b})`;
+        }
+
+        // FIX #2: Generate Google Maps link
+        function getGoogleMapsLink(lat, lng) {
+            return `https://www.google.com/maps?q=${lat},${lng}&z=15`;
         }
 
         async function startScan() {
@@ -877,9 +988,9 @@
                 });
 
                 highMarker = L.marker([highest.latitude, highest.longitude], { icon: mkIcon('#00e5a0', 'rgba(0,229,160,0.7)', '▲') }).addTo(map)
-                    .bindPopup(`<div class="popup-content"><div class="popup-elev" style="color:#00e5a0">${highest.elevation.toFixed(1)}م</div><div class="popup-label">🔺 أعلى نقطة</div></div>`, { className: 'custom-popup' });
+                    .bindPopup(`<div class="popup-content"><div class="popup-elev" style="color:#00e5a0">${highest.elevation.toFixed(1)}م</div><div class="popup-label">🔺 أعلى نقطة</div><a href="${getGoogleMapsLink(highest.latitude, highest.longitude)}" target="_blank" style="color:#4285f4;font-size:11px;text-decoration:none;">📍 افتح في Google Maps</a></div>`, { className: 'custom-popup' });
                 lowMarker = L.marker([lowest.latitude, lowest.longitude], { icon: mkIcon('#ff4757', 'rgba(255,71,87,0.7)', '▼') }).addTo(map)
-                    .bindPopup(`<div class="popup-content"><div class="popup-elev" style="color:#ff4757">${lowest.elevation.toFixed(1)}م</div><div class="popup-label">🔻 أخفض نقطة</div></div>`, { className: 'custom-popup' });
+                    .bindPopup(`<div class="popup-content"><div class="popup-elev" style="color:#ff4757">${lowest.elevation.toFixed(1)}م</div><div class="popup-label">🔻 أخفض نقطة</div><a href="${getGoogleMapsLink(lowest.latitude, lowest.longitude)}" target="_blank" style="color:#4285f4;font-size:11px;text-decoration:none;">📍 افتح في Google Maps</a></div>`, { className: 'custom-popup' });
 
                 document.getElementById('legend-max').textContent = maxE.toFixed(0) + 'م';
                 document.getElementById('legend-mid').textContent = ((maxE + minE) / 2).toFixed(0) + 'م';
@@ -889,6 +1000,7 @@
                 const sorted = [...results].sort((a, b) => a.latitude - b.latitude);
                 const areaKm = ((bounds.getNorth() - bounds.getSouth()) * 111 * (bounds.getEast() - bounds.getWest()) * 111 * Math.cos(bounds.getCenter().lat * Math.PI / 180)).toFixed(0);
 
+                // FIX #2: Google Maps links in results cards
                 container.innerHTML = `
                     ${selectedCity ? `<div class="result-card" style="border-color:rgba(59,130,246,0.3);background:linear-gradient(135deg,var(--bg-card),rgba(59,130,246,0.05));">
                         <div class="result-header"><span class="result-icon">🏙️</span><span class="result-label" style="color:var(--blue);">${selectedCity.name}</span></div>
@@ -898,11 +1010,17 @@
                         <div class="result-header"><span class="result-icon">🔺</span><span class="result-label">أعلى نقطة</span></div>
                         <div class="result-elevation">${highest.elevation.toFixed(1)} <span class="result-unit">متر</span></div>
                         <div class="result-coords">📍 ${highest.latitude.toFixed(5)}, ${highest.longitude.toFixed(5)}</div>
+                        <a href="${getGoogleMapsLink(highest.latitude, highest.longitude)}" target="_blank" class="gmaps-link">
+                            🗺️ اذهب إلى Google Maps
+                        </a>
                     </div>
                     <div class="result-card lowest">
                         <div class="result-header"><span class="result-icon">🔻</span><span class="result-label">أخفض نقطة</span></div>
                         <div class="result-elevation">${lowest.elevation.toFixed(1)} <span class="result-unit">متر</span></div>
                         <div class="result-coords">📍 ${lowest.latitude.toFixed(5)}, ${lowest.longitude.toFixed(5)}</div>
+                        <a href="${getGoogleMapsLink(lowest.latitude, lowest.longitude)}" target="_blank" class="gmaps-link">
+                            🗺️ اذهب إلى Google Maps
+                        </a>
                     </div>
                     <div class="stats-grid">
                         <div class="stat-item"><div class="stat-value">${diff.toFixed(1)}م</div><div class="stat-label">فرق الارتفاع</div></div>
