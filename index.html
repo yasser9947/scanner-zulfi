@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ماسح الارتفاعات - Elevation Scanner</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: #1a2234;
+            --bg-card-hover: #1e2a3f;
+            --accent: #00e5a0;
+            --accent-glow: rgba(0, 229, 160, 0.3);
+            --accent-dim: rgba(0, 229, 160, 0.1);
+            --danger: #ff4757;
+            --danger-glow: rgba(255, 71, 87, 0.3);
+            --text-primary: #e8edf5;
+            --text-secondary: #8892a4;
+            --text-dim: #4a5568;
+            --border: rgba(255, 255, 255, 0.06);
+            --gold: #ffd700;
+            --blue: #3b82f6;
+            --blue-glow: rgba(59, 130, 246, 0.3);
+            --blue-dim: rgba(59, 130, 246, 0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(0, 229, 160, 0.03) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(255, 71, 87, 0.03) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .app-layout {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo { display: flex; align-items: center; gap: 12px; }
+
+        .logo-icon {
+            width: 40px; height: 40px;
+            background: linear-gradient(135deg, var(--accent), #00b880);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 4px 15px var(--accent-glow);
+        }
+
+        .logo-text { font-size: 20px; font-weight: 900; letter-spacing: -0.5px; }
+        .logo-text span { color: var(--accent); }
+
+        .header-badge {
+            display: flex; align-items: center; gap: 8px;
+            padding: 6px 14px;
+            background: var(--accent-dim);
+            border: 1px solid rgba(0, 229, 160, 0.2);
+            border-radius: 20px;
+            font-size: 12px; color: var(--accent); font-weight: 600;
+        }
+
+        .pulse-dot {
+            width: 6px; height: 6px;
+            background: var(--accent); border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.5); }
+        }
+
+        .sidebar {
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 20px;
+            display: flex; flex-direction: column; gap: 16px;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--text-dim); border-radius: 4px; }
+
+        .section-title {
+            font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 2px;
+            color: var(--text-dim); margin-bottom: 4px;
+        }
+
+        .city-search-card {
+            background: linear-gradient(135deg, var(--bg-card), rgba(59, 130, 246, 0.05));
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 14px; padding: 16px;
+            position: relative; overflow: hidden;
+        }
+
+        .city-search-card::before {
+            content: '';
+            position: absolute; top: -50%; right: -30%;
+            width: 120px; height: 120px;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.08), transparent 70%);
+            pointer-events: none;
+        }
+
+        .city-search-title {
+            display: flex; align-items: center; gap: 8px;
+            margin-bottom: 12px; font-size: 14px; font-weight: 700; color: var(--blue);
+        }
+
+        .city-search-title .icon {
+            width: 28px; height: 28px;
+            background: var(--blue-dim); border-radius: 8px;
+            display: flex; align-items: center; justify-content: center; font-size: 14px;
+        }
+
+        .search-input-wrapper {
+            display: flex; gap: 8px; position: relative;
+        }
+
+        .search-input {
+            flex: 1; padding: 10px 14px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border); border-radius: 10px;
+            color: var(--text-primary);
+            font-family: 'Cairo', sans-serif; font-size: 14px;
+            outline: none; transition: border-color 0.2s;
+        }
+
+        .search-input::placeholder { color: var(--text-dim); }
+
+        .search-input:focus {
+            border-color: var(--blue);
+            box-shadow: 0 0 0 3px var(--blue-dim);
+        }
+
+        .search-btn {
+            padding: 10px 16px;
+            background: linear-gradient(135deg, var(--blue), #2563eb);
+            border: none; border-radius: 10px;
+            color: white; font-family: 'Cairo', sans-serif;
+            font-size: 13px; font-weight: 700;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px; white-space: nowrap;
+        }
+
+        .search-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 15px var(--blue-glow); }
+        .search-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .search-results {
+            position: absolute; top: calc(100%); left: 0; right: 0;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; margin-top: 6px;
+            max-height: 250px; overflow-y: auto; z-index: 100;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5); display: none;
+        }
+
+        .search-results.visible { display: block; animation: dropIn 0.2s ease-out; }
+
+        @keyframes dropIn {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .search-result-item {
+            padding: 10px 14px; cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+            display: flex; align-items: center; gap: 10px;
+        }
+
+        .search-result-item:last-child { border-bottom: none; }
+        .search-result-item:hover { background: var(--bg-card-hover); }
+        .search-result-item .sr-icon { font-size: 18px; min-width: 24px; text-align: center; }
+        .search-result-item .sr-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+        .search-result-item .sr-detail { font-size: 11px; color: var(--text-dim); margin-top: 1px; }
+
+        .active-city {
+            display: none; align-items: center; gap: 8px;
+            margin-top: 10px; padding: 8px 12px;
+            background: var(--bg-primary); border-radius: 8px; font-size: 12px;
+        }
+
+        .active-city.visible { display: flex; animation: dropIn 0.3s ease-out; }
+        .active-city-name { flex: 1; color: var(--text-secondary); font-weight: 600; }
+        .active-city-name strong { color: var(--blue); }
+
+        .active-city-clear {
+            background: none; border: none; color: var(--text-dim);
+            cursor: pointer; font-size: 14px; padding: 0 4px; transition: color 0.2s;
+        }
+
+        .active-city-clear:hover { color: var(--danger); }
+
+        .or-divider {
+            display: flex; align-items: center; gap: 12px;
+            color: var(--text-dim); font-size: 11px; font-weight: 600; letter-spacing: 1px;
+        }
+
+        .or-divider::before, .or-divider::after {
+            content: ''; flex: 1; height: 1px; background: var(--border);
+        }
+
+        .instructions-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 16px;
+        }
+
+        .step { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; }
+        .step + .step { border-top: 1px solid var(--border); }
+
+        .step-num {
+            width: 24px; height: 24px; min-width: 24px;
+            background: var(--accent-dim); color: var(--accent); border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 700; font-family: 'JetBrains Mono', monospace;
+        }
+
+        .step-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+        .control-btn {
+            padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+            background: var(--bg-card); color: var(--text-secondary);
+            font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+
+        .control-btn:hover { background: var(--bg-card-hover); border-color: var(--accent); color: var(--accent); }
+
+        .control-btn.primary {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, var(--accent), #00b880);
+            color: var(--bg-primary); border: none;
+            font-weight: 700; font-size: 14px; padding: 12px;
+        }
+
+        .control-btn.primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--accent-glow); }
+        .control-btn.primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .control-btn.danger { border-color: rgba(255, 71, 87, 0.3); color: var(--danger); }
+        .control-btn.danger:hover { background: rgba(255, 71, 87, 0.1); border-color: var(--danger); }
+
+        .density-control {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 16px;
+        }
+
+        .density-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .density-label { font-size: 13px; font-weight: 600; }
+
+        .density-value {
+            font-family: 'JetBrains Mono', monospace; font-size: 12px;
+            color: var(--accent); background: var(--accent-dim);
+            padding: 2px 8px; border-radius: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%; -webkit-appearance: none; height: 4px;
+            background: var(--bg-primary); border-radius: 4px; outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 18px; height: 18px;
+            background: var(--accent); border-radius: 50%; cursor: pointer;
+            box-shadow: 0 2px 10px var(--accent-glow);
+        }
+
+        .results-container { display: flex; flex-direction: column; gap: 10px; }
+
+        .result-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 16px;
+            transition: all 0.3s; animation: slideIn 0.4s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .result-card.highest {
+            border-color: rgba(0, 229, 160, 0.3);
+            background: linear-gradient(135deg, var(--bg-card), rgba(0, 229, 160, 0.05));
+        }
+
+        .result-card.lowest {
+            border-color: rgba(255, 71, 87, 0.3);
+            background: linear-gradient(135deg, var(--bg-card), rgba(255, 71, 87, 0.05));
+        }
+
+        .result-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .result-icon { font-size: 18px; }
+
+        .result-label {
+            font-size: 12px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1.5px;
+        }
+
+        .result-card.highest .result-label { color: var(--accent); }
+        .result-card.lowest .result-label { color: var(--danger); }
+
+        .result-elevation {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 36px; font-weight: 700; line-height: 1; margin-bottom: 8px;
+        }
+
+        .result-card.highest .result-elevation { color: var(--accent); }
+        .result-card.lowest .result-elevation { color: var(--danger); }
+
+        .result-unit { font-size: 16px; color: var(--text-secondary); font-weight: 400; }
+
+        .result-coords {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            color: var(--text-dim); background: var(--bg-primary);
+            padding: 6px 10px; border-radius: 6px; display: inline-block;
+        }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+        .stat-item {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 12px; text-align: center;
+        }
+
+        .stat-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 18px; font-weight: 700; color: var(--text-primary);
+        }
+
+        .stat-label {
+            font-size: 10px; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 1px; margin-top: 2px;
+        }
+
+        .progress-container {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 16px; animation: slideIn 0.3s ease-out;
+        }
+
+        .progress-text {
+            font-size: 13px; color: var(--text-secondary);
+            margin-bottom: 10px; display: flex; justify-content: space-between;
+        }
+
+        .progress-bar { height: 6px; background: var(--bg-primary); border-radius: 6px; overflow: hidden; }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #00b880);
+            border-radius: 6px; transition: width 0.3s;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .elevation-profile {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 16px; animation: slideIn 0.5s ease-out;
+        }
+
+        .profile-canvas { width: 100%; height: 80px; margin-top: 8px; }
+
+        .map-container { position: relative; }
+        #map { width: 100%; height: 100%; background: var(--bg-primary); }
+
+        .leaflet-container { background: var(--bg-primary) !important; font-family: 'Cairo', sans-serif !important; }
+
+        .custom-popup .leaflet-popup-content-wrapper {
+            background: var(--bg-card); color: var(--text-primary);
+            border: 1px solid var(--border); border-radius: 10px;
+            font-family: 'Cairo', sans-serif; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+
+        .custom-popup .leaflet-popup-tip { background: var(--bg-card); border: 1px solid var(--border); }
+        .popup-content { padding: 4px; text-align: center; }
+
+        .popup-elev { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; }
+        .popup-label { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+        .map-overlay {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 8px 16px; font-size: 12px;
+            color: var(--text-secondary); z-index: 1000; pointer-events: none;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        .heatmap-legend {
+            position: absolute; top: 20px; left: 20px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 12px; z-index: 1000; display: none;
+        }
+
+        .heatmap-legend.visible { display: block; animation: slideIn 0.3s ease-out; }
+
+        .legend-gradient {
+            width: 20px; height: 120px; border-radius: 4px;
+            background: linear-gradient(to bottom, var(--accent), var(--gold), var(--danger));
+            margin: 8px auto;
+        }
+
+        .legend-labels {
+            display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+            height: 120px; position: absolute; right: 44px; top: 34px;
+            font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim);
+        }
+
+        .legend-title {
+            font-size: 10px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1px; color: var(--text-secondary); text-align: center;
+        }
+
+        .city-quick-scan {
+            margin-top: 8px; width: 100%; padding: 10px;
+            background: linear-gradient(135deg, var(--accent), #00b880);
+            color: var(--bg-primary); border: none; border-radius: 10px;
+            font-family: 'Cairo', sans-serif; font-size: 13px; font-weight: 700;
+            cursor: pointer; transition: all 0.2s;
+            display: none; align-items: center; justify-content: center; gap: 6px;
+        }
+
+        .city-quick-scan.visible { display: flex; animation: dropIn 0.3s ease-out; }
+        .city-quick-scan:hover { transform: translateY(-1px); box-shadow: 0 6px 20px var(--accent-glow); }
+        .city-quick-scan:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+        @media (max-width: 768px) {
+            .app-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
+            .sidebar { order: 3; max-height: 40vh; border-left: none; border-top: 1px solid var(--border); }
+            .map-container { order: 2; min-height: 50vh; }
+        }
+
+        .spinner {
+            display: inline-block; width: 14px; height: 14px;
+            border: 2px solid var(--bg-primary); border-top-color: transparent;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .empty-state { text-align: center; padding: 20px; color: var(--text-dim); }
+        .empty-state-icon { font-size: 40px; margin-bottom: 8px; opacity: 0.5; }
+        .empty-state-text { font-size: 13px; }
+
+        .leaflet-draw-toolbar a { background-color: var(--bg-card) !important; border-color: var(--border) !important; }
+        .leaflet-draw-actions a { background-color: var(--bg-card) !important; border-color: var(--border) !important; color: var(--text-primary) !important; }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">⛰️</div>
+                <div class="logo-text">ماسح <span>الارتفاعات</span></div>
+            </div>
+            <div class="header-badge">
+                <div class="pulse-dot"></div>
+                Open Elevation API
+            </div>
+        </header>
+
+        <aside class="sidebar">
+            <div>
+                <div class="section-title">🏙️ بحث بالمدينة</div>
+                <div class="city-search-card">
+                    <div class="city-search-title">
+                        <div class="icon">🔍</div>
+                        ابحث عن مدينة
+                    </div>
+                    <div class="search-input-wrapper">
+                        <input type="text" class="search-input" id="city-input" placeholder="مثال: الرياض، جدة، أبها..." autocomplete="off">
+                        <button class="search-btn" id="city-search-btn" onclick="searchCity()">بحث</button>
+                        <div class="search-results" id="search-results"></div>
+                    </div>
+                    <div class="active-city" id="active-city">
+                        <span class="active-city-name" id="active-city-name"></span>
+                        <button class="active-city-clear" onclick="clearCitySelection()" title="إلغاء">✕</button>
+                    </div>
+                    <button class="city-quick-scan" id="city-quick-scan" onclick="startScan()">
+                        ⚡ مسح ارتفاعات المدينة
+                    </button>
+                </div>
+            </div>
+
+            <div class="or-divider">أو ارسم يدوياً</div>
+
+            <div>
+                <div class="section-title">رسم يدوي على الخريطة</div>
+                <div class="controls-grid">
+                    <button class="control-btn" onclick="startDrawRect()">▭ مستطيل</button>
+                    <button class="control-btn" onclick="startDrawPolygon()">⬠ مضلع</button>
+                    <button class="control-btn danger" onclick="clearAll()">✕ مسح الكل</button>
+                    <button class="control-btn" onclick="locateMe()">◎ موقعي</button>
+                    <button class="control-btn primary" onclick="startScan()" id="btn-scan" disabled>
+                        ⚡ ابدأ المسح
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <div class="section-title">إعدادات المسح</div>
+                <div class="density-control">
+                    <div class="density-header">
+                        <span class="density-label">كثافة النقاط</span>
+                        <span class="density-value" id="density-display">10 × 10</span>
+                    </div>
+                    <input type="range" id="density-slider" min="5" max="25" value="10" oninput="updateDensity(this.value)">
+                    <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-dim); margin-top:4px;">
+                        <span>سريع</span>
+                        <span>دقيق</span>
+                    </div>
+                </div>
+            </div>
+
+            <div id="results-section">
+                <div class="section-title">النتائج</div>
+                <div class="empty-state" id="empty-state">
+                    <div class="empty-state-icon">🗺️</div>
+                    <div class="empty-state-text">ابحث عن مدينة أو ارسم منطقة<br>لبدء المسح</div>
+                </div>
+                <div class="results-container" id="results-container" style="display:none;"></div>
+            </div>
+        </aside>
+
+        <div class="map-container">
+            <div id="map"></div>
+            <div class="map-overlay" id="map-hint">ابحث عن مدينة أو ارسم منطقة يدوياً على الخريطة</div>
+            <div class="heatmap-legend" id="heatmap-legend">
+                <div class="legend-title">الارتفاع (م)</div>
+                <div style="position:relative;">
+                    <div class="legend-gradient"></div>
+                    <div class="legend-labels">
+                        <span id="legend-max">-</span>
+                        <span id="legend-mid">-</span>
+                        <span id="legend-min">-</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+    <script>
+        let map, drawnItems, drawControl;
+        let currentShape = null;
+        let cityBoundaryLayer = null;
+        let cityLabelMarker = null;
+        let scanMarkers = [];
+        let highMarker = null, lowMarker = null;
+        let density = 10;
+        let isScanning = false;
+        let selectedCity = null;
+
+        function initMap() {
+            map = L.map('map', { center: [24.7136, 46.6753], zoom: 6, zoomControl: false });
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19
+            }).addTo(map);
+            L.control.zoom({ position: 'topright' }).addTo(map);
+
+            drawnItems = new L.FeatureGroup();
+            map.addLayer(drawnItems);
+
+            drawControl = new L.Control.Draw({
+                position: 'topright',
+                draw: {
+                    polygon: { shapeOptions: { color: '#00e5a0', fillColor: 'rgba(0,229,160,0.1)', weight: 2 } },
+                    rectangle: { shapeOptions: { color: '#00e5a0', fillColor: 'rgba(0,229,160,0.1)', weight: 2 } },
+                    circle: false, circlemarker: false, marker: false, polyline: false
+                },
+                edit: { featureGroup: drawnItems, remove: true }
+            });
+            map.addControl(drawControl);
+
+            map.on(L.Draw.Event.CREATED, function (e) {
+                clearCitySelection();
+                drawnItems.clearLayers();
+                clearMarkers();
+                currentShape = e.layer;
+                drawnItems.addLayer(currentShape);
+                document.getElementById('btn-scan').disabled = false;
+                document.getElementById('map-hint').style.display = 'none';
+            });
+
+            map.on(L.Draw.Event.DELETED, function () {
+                currentShape = null;
+                document.getElementById('btn-scan').disabled = true;
+                clearMarkers(); hideResults();
+            });
+
+            document.getElementById('city-input').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') searchCity();
+            });
+
+            document.addEventListener('click', function(e) {
+                const r = document.getElementById('search-results');
+                if (!r.contains(e.target) && e.target !== document.getElementById('city-input')) {
+                    r.classList.remove('visible');
+                }
+            });
+        }
+
+        // City Search
+        async function searchCity() {
+            const query = document.getElementById('city-input').value.trim();
+            if (!query) return;
+
+            const btn = document.getElementById('city-search-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner" style="border-color:white;border-top-color:transparent;width:12px;height:12px;"></span>';
+
+            try {
+                const resp = await fetch(
+                    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=1&polygon_geojson=1&accept-language=ar,en`,
+                    { headers: { 'User-Agent': 'ElevationScanner/1.0' } }
+                );
+                const data = await resp.json();
+                const resultsDiv = document.getElementById('search-results');
+
+                if (data.length === 0) {
+                    resultsDiv.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim);font-size:13px;">لم يتم العثور على نتائج</div>';
+                    resultsDiv.classList.add('visible');
+                    return;
+                }
+
+                resultsDiv.innerHTML = data.map((item, i) => {
+                    const icon = item.type === 'city' || item.type === 'town' ? '🏙️' : item.type === 'village' ? '🏘️' : item.type === 'state' ? '🗺️' : item.type === 'country' ? '🌍' : '📍';
+                    const name = item.display_name.split(',').slice(0, 3).join('، ');
+                    return `<div class="search-result-item" onclick="selectCityResult(${i})">
+                        <span class="sr-icon">${icon}</span>
+                        <div><div class="sr-name">${item.name || query}</div><div class="sr-detail">${name}</div></div>
+                    </div>`;
+                }).join('');
+
+                resultsDiv.classList.add('visible');
+                window._searchResults = data;
+            } catch (err) {
+                document.getElementById('search-results').innerHTML = '<div style="padding:16px;text-align:center;color:var(--danger);font-size:13px;">حدث خطأ، حاول مرة أخرى</div>';
+                document.getElementById('search-results').classList.add('visible');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'بحث';
+            }
+        }
+
+        function selectCityResult(index) {
+            const item = window._searchResults[index];
+            if (!item) return;
+            document.getElementById('search-results').classList.remove('visible');
+            clearAll();
+
+            selectedCity = item;
+            const bbox = item.boundingbox;
+            const bounds = L.latLngBounds(
+                L.latLng(parseFloat(bbox[0]), parseFloat(bbox[2])),
+                L.latLng(parseFloat(bbox[1]), parseFloat(bbox[3]))
+            );
+
+            if (item.geojson && (item.geojson.type === 'Polygon' || item.geojson.type === 'MultiPolygon')) {
+                cityBoundaryLayer = L.geoJSON(item.geojson, {
+                    style: { color: '#3b82f6', fillColor: 'rgba(59,130,246,0.08)', weight: 2.5, dashArray: '8, 4', fillOpacity: 0.15 }
+                }).addTo(map);
+                currentShape = L.rectangle(bounds, { color: 'transparent', fillColor: 'transparent', weight: 0 });
+            } else {
+                currentShape = L.rectangle(bounds, { color: '#3b82f6', fillColor: 'rgba(59,130,246,0.08)', weight: 2, dashArray: '8, 4' });
+                drawnItems.addLayer(currentShape);
+            }
+
+            const center = bounds.getCenter();
+            cityLabelMarker = L.marker(center, {
+                icon: L.divIcon({
+                    html: `<div style="font-family:Cairo;font-size:15px;font-weight:900;color:#3b82f6;text-shadow:0 0 10px rgba(59,130,246,0.5),0 2px 4px rgba(0,0,0,0.8);white-space:nowrap;text-align:center;">${item.name}</div>`,
+                    className: '', iconSize: [0, 0], iconAnchor: [0, 0]
+                })
+            }).addTo(map);
+
+            map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 12, duration: 1.2 });
+
+            document.getElementById('active-city-name').innerHTML = `📍 <strong>${item.name}</strong>`;
+            document.getElementById('active-city').classList.add('visible');
+            document.getElementById('btn-scan').disabled = false;
+            document.getElementById('city-quick-scan').classList.add('visible');
+            document.getElementById('map-hint').style.display = 'none';
+        }
+
+        function clearCitySelection() {
+            selectedCity = null;
+            if (cityBoundaryLayer) { map.removeLayer(cityBoundaryLayer); cityBoundaryLayer = null; }
+            if (cityLabelMarker) { map.removeLayer(cityLabelMarker); cityLabelMarker = null; }
+            document.getElementById('active-city').classList.remove('visible');
+            document.getElementById('city-quick-scan').classList.remove('visible');
+            document.getElementById('city-input').value = '';
+        }
+
+        function startDrawRect() {
+            new L.Draw.Rectangle(map, { shapeOptions: { color: '#00e5a0', fillColor: 'rgba(0,229,160,0.1)', weight: 2 } }).enable();
+        }
+
+        function startDrawPolygon() {
+            new L.Draw.Polygon(map, { shapeOptions: { color: '#00e5a0', fillColor: 'rgba(0,229,160,0.1)', weight: 2 } }).enable();
+        }
+
+        function clearAll() {
+            drawnItems.clearLayers(); clearMarkers(); clearCitySelection();
+            currentShape = null;
+            document.getElementById('btn-scan').disabled = true;
+            document.getElementById('map-hint').style.display = 'flex';
+            document.getElementById('heatmap-legend').classList.remove('visible');
+            hideResults();
+        }
+
+        function clearMarkers() {
+            scanMarkers.forEach(m => map.removeLayer(m)); scanMarkers = [];
+            if (highMarker) { map.removeLayer(highMarker); highMarker = null; }
+            if (lowMarker) { map.removeLayer(lowMarker); lowMarker = null; }
+        }
+
+        function hideResults() {
+            document.getElementById('results-container').style.display = 'none';
+            document.getElementById('results-container').innerHTML = '';
+            document.getElementById('empty-state').style.display = 'block';
+        }
+
+        function locateMe() { map.locate({ setView: true, maxZoom: 12 }); }
+
+        function updateDensity(val) {
+            density = parseInt(val);
+            document.getElementById('density-display').textContent = `${val} × ${val}`;
+        }
+
+        function generateGridPoints(bounds, n) {
+            const points = [];
+            const s = bounds.getSouth(), no = bounds.getNorth(), w = bounds.getWest(), e = bounds.getEast();
+            const latStep = (no - s) / (n - 1), lngStep = (e - w) / (n - 1);
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    const lat = s + i * latStep, lng = w + j * lngStep;
+                    if (currentShape instanceof L.Polygon && !(currentShape instanceof L.Rectangle)) {
+                        if (isPointInPolygon(L.latLng(lat, lng), currentShape)) points.push({ latitude: lat, longitude: lng });
+                    } else {
+                        points.push({ latitude: lat, longitude: lng });
+                    }
+                }
+            }
+            return points;
+        }
+
+        function isPointInPolygon(point, polygon) {
+            const ll = polygon.getLatLngs()[0]; let inside = false;
+            const x = point.lat, y = point.lng;
+            for (let i = 0, j = ll.length - 1; i < ll.length; j = i++) {
+                const xi = ll[i].lat, yi = ll[i].lng, xj = ll[j].lat, yj = ll[j].lng;
+                if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+            }
+            return inside;
+        }
+
+        async function fetchElevations(points) {
+            const chunkSize = 50, results = [];
+            for (let i = 0; i < points.length; i += chunkSize) {
+                const chunk = points.slice(i, i + chunkSize);
+                const locs = chunk.map(p => `${p.latitude},${p.longitude}`).join('|');
+                try {
+                    const r = await fetch(`https://api.open-elevation.com/api/v1/lookup?locations=${locs}`);
+                    const d = await r.json();
+                    if (d.results) results.push(...d.results);
+                } catch {
+                    try {
+                        const r = await fetch('https://api.open-elevation.com/api/v1/lookup', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ locations: chunk })
+                        });
+                        const d = await r.json();
+                        if (d.results) results.push(...d.results);
+                    } catch (e) { console.error('Fetch failed', e); }
+                }
+                updateProgress(Math.min(100, Math.round(((i + chunkSize) / points.length) * 100)));
+                if (i + chunkSize < points.length) await new Promise(r => setTimeout(r, 300));
+            }
+            return results;
+        }
+
+        function updateProgress(pct) {
+            const f = document.getElementById('progress-fill'), t = document.getElementById('progress-pct');
+            if (f) f.style.width = pct + '%'; if (t) t.textContent = pct + '%';
+        }
+
+        function getElevationColor(elev, min, max) {
+            const ratio = (elev - min) / (max - min || 1);
+            let r, g, b;
+            if (ratio < 0.5) { const t = ratio * 2; r = 255; g = Math.round(71 + 144 * t); b = Math.round(87 * (1 - t)); }
+            else { const t = (ratio - 0.5) * 2; r = Math.round(255 * (1 - t)); g = Math.round(215 + 14 * t); b = Math.round(160 * t); }
+            return `rgb(${r},${g},${b})`;
+        }
+
+        async function startScan() {
+            if (!currentShape || isScanning) return;
+            isScanning = true;
+
+            const scanBtn = document.getElementById('btn-scan'), cityBtn = document.getElementById('city-quick-scan');
+            scanBtn.disabled = true; scanBtn.innerHTML = '<span class="spinner"></span> جاري المسح...';
+            cityBtn.disabled = true; cityBtn.innerHTML = '<span class="spinner"></span> جاري المسح...';
+            clearMarkers();
+            document.getElementById('heatmap-legend').classList.remove('visible');
+
+            const bounds = currentShape.getBounds();
+            const points = generateGridPoints(bounds, density);
+            const container = document.getElementById('results-container');
+            document.getElementById('empty-state').style.display = 'none';
+            container.style.display = 'flex';
+
+            const cityName = selectedCity ? selectedCity.name : 'المنطقة المحددة';
+            container.innerHTML = `<div class="progress-container"><div class="progress-text"><span>جاري مسح ${cityName} — ${points.length} نقطة...</span><span id="progress-pct">0%</span></div><div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div></div>`;
+
+            try {
+                const results = await fetchElevations(points);
+                if (results.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><div class="empty-state-text">لم يتم العثور على بيانات</div></div>';
+                    resetButtons(); return;
+                }
+
+                let highest = results[0], lowest = results[0], total = 0;
+                results.forEach(r => {
+                    if (r.elevation > highest.elevation) highest = r;
+                    if (r.elevation < lowest.elevation) lowest = r;
+                    total += r.elevation;
+                });
+
+                const avg = total / results.length, diff = highest.elevation - lowest.elevation;
+                const minE = lowest.elevation, maxE = highest.elevation;
+
+                results.forEach(r => {
+                    const color = getElevationColor(r.elevation, minE, maxE);
+                    const m = L.circleMarker([r.latitude, r.longitude], {
+                        radius: Math.max(4, Math.min(8, 200 / density)), fillColor: color, fillOpacity: 0.7, stroke: false
+                    }).addTo(map);
+                    m.bindPopup(`<div class="popup-content"><div class="popup-elev" style="color:${color}">${r.elevation.toFixed(1)}م</div><div class="popup-label">${r.latitude.toFixed(5)}, ${r.longitude.toFixed(5)}</div></div>`, { className: 'custom-popup' });
+                    scanMarkers.push(m);
+                });
+
+                const mkIcon = (bg, shadow, ch) => L.divIcon({
+                    html: `<div style="background:${bg};color:${bg==='#00e5a0'?'#0a0e17':'white'};width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:bold;box-shadow:0 0 25px ${shadow};border:3px solid white;">${ch}</div>`,
+                    iconSize: [40, 40], iconAnchor: [20, 20], className: ''
+                });
+
+                highMarker = L.marker([highest.latitude, highest.longitude], { icon: mkIcon('#00e5a0', 'rgba(0,229,160,0.7)', '▲') }).addTo(map)
+                    .bindPopup(`<div class="popup-content"><div class="popup-elev" style="color:#00e5a0">${highest.elevation.toFixed(1)}م</div><div class="popup-label">🔺 أعلى نقطة</div></div>`, { className: 'custom-popup' });
+                lowMarker = L.marker([lowest.latitude, lowest.longitude], { icon: mkIcon('#ff4757', 'rgba(255,71,87,0.7)', '▼') }).addTo(map)
+                    .bindPopup(`<div class="popup-content"><div class="popup-elev" style="color:#ff4757">${lowest.elevation.toFixed(1)}م</div><div class="popup-label">🔻 أخفض نقطة</div></div>`, { className: 'custom-popup' });
+
+                document.getElementById('legend-max').textContent = maxE.toFixed(0) + 'م';
+                document.getElementById('legend-mid').textContent = ((maxE + minE) / 2).toFixed(0) + 'م';
+                document.getElementById('legend-min').textContent = minE.toFixed(0) + 'م';
+                document.getElementById('heatmap-legend').classList.add('visible');
+
+                const sorted = [...results].sort((a, b) => a.latitude - b.latitude);
+                const areaKm = ((bounds.getNorth() - bounds.getSouth()) * 111 * (bounds.getEast() - bounds.getWest()) * 111 * Math.cos(bounds.getCenter().lat * Math.PI / 180)).toFixed(0);
+
+                container.innerHTML = `
+                    ${selectedCity ? `<div class="result-card" style="border-color:rgba(59,130,246,0.3);background:linear-gradient(135deg,var(--bg-card),rgba(59,130,246,0.05));">
+                        <div class="result-header"><span class="result-icon">🏙️</span><span class="result-label" style="color:var(--blue);">${selectedCity.name}</span></div>
+                        <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">${selectedCity.display_name.split(',').slice(0, 4).join('، ')}</div>
+                    </div>` : ''}
+                    <div class="result-card highest">
+                        <div class="result-header"><span class="result-icon">🔺</span><span class="result-label">أعلى نقطة</span></div>
+                        <div class="result-elevation">${highest.elevation.toFixed(1)} <span class="result-unit">متر</span></div>
+                        <div class="result-coords">📍 ${highest.latitude.toFixed(5)}, ${highest.longitude.toFixed(5)}</div>
+                    </div>
+                    <div class="result-card lowest">
+                        <div class="result-header"><span class="result-icon">🔻</span><span class="result-label">أخفض نقطة</span></div>
+                        <div class="result-elevation">${lowest.elevation.toFixed(1)} <span class="result-unit">متر</span></div>
+                        <div class="result-coords">📍 ${lowest.latitude.toFixed(5)}, ${lowest.longitude.toFixed(5)}</div>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-item"><div class="stat-value">${diff.toFixed(1)}م</div><div class="stat-label">فرق الارتفاع</div></div>
+                        <div class="stat-item"><div class="stat-value">${avg.toFixed(1)}م</div><div class="stat-label">متوسط الارتفاع</div></div>
+                        <div class="stat-item"><div class="stat-value">${results.length}</div><div class="stat-label">نقاط الفحص</div></div>
+                        <div class="stat-item"><div class="stat-value">${areaKm} km²</div><div class="stat-label">المساحة التقريبية</div></div>
+                    </div>
+                    <div class="elevation-profile"><div class="section-title">مخطط الارتفاع</div><canvas class="profile-canvas" id="profile-canvas"></canvas></div>
+                `;
+                drawElevationProfile(sorted);
+            } catch (error) {
+                container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">❌</div><div class="empty-state-text">حدث خطأ: ${error.message}</div></div>`;
+            }
+            resetButtons();
+        }
+
+        function resetButtons() {
+            isScanning = false;
+            const s = document.getElementById('btn-scan'), c = document.getElementById('city-quick-scan');
+            s.disabled = false; s.innerHTML = '⚡ ابدأ المسح';
+            c.disabled = false; c.innerHTML = '⚡ مسح ارتفاعات المدينة';
+        }
+
+        function drawElevationProfile(data) {
+            const canvas = document.getElementById('profile-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvas.offsetWidth * dpr;
+            canvas.height = canvas.offsetHeight * dpr;
+            ctx.scale(dpr, dpr);
+
+            const w = canvas.offsetWidth, h = canvas.offsetHeight;
+            const elevs = data.map(d => d.elevation);
+            const minE = Math.min(...elevs), maxE = Math.max(...elevs), range = maxE - minE || 1;
+
+            let sampled = elevs;
+            if (elevs.length > 100) { const step = Math.floor(elevs.length / 100); sampled = elevs.filter((_, i) => i % step === 0); }
+            const xStep = w / (sampled.length - 1);
+
+            const grad = ctx.createLinearGradient(0, 0, 0, h);
+            grad.addColorStop(0, 'rgba(0,229,160,0.3)');
+            grad.addColorStop(1, 'rgba(0,229,160,0.02)');
+
+            ctx.beginPath(); ctx.moveTo(0, h);
+            sampled.forEach((e, i) => ctx.lineTo(i * xStep, h - 5 - ((e - minE) / range) * (h - 10)));
+            ctx.lineTo(w, h); ctx.closePath();
+            ctx.fillStyle = grad; ctx.fill();
+
+            ctx.beginPath();
+            sampled.forEach((e, i) => { const x = i * xStep, y = h - 5 - ((e - minE) / range) * (h - 10); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+            ctx.strokeStyle = '#00e5a0'; ctx.lineWidth = 1.5; ctx.stroke();
+        }
+
+        initMap();
+    </script>
+</body>
+</html>
