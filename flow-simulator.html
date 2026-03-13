@@ -41,7 +41,7 @@
         .app {
             display: grid;
             grid-template-columns: 420px 1fr;
-            grid-template-rows: auto 1fr auto;
+            grid-template-rows: auto 1fr;
             height: 100vh;
         }
 
@@ -104,16 +104,18 @@
         }
 
         /* Footer */
-        .footer {
-            grid-column: 1 / -1;
-            display: flex; align-items: center; justify-content: center; gap: 8px;
-            padding: 8px;
-            background: var(--bg-secondary);
-            border-top: 1px solid var(--border);
-            font-size: 11px; color: var(--text-dim);
+        /* Watermark instead of fat footer */
+        .watermark {
+            position: absolute;
+            bottom: 8px;
+            right: 12px;
+            z-index: 999;
+            font-size: 10px;
+            color: rgba(255,255,255,0.2);
+            pointer-events: none;
+            font-weight: 600;
+            letter-spacing: 0.5px;
         }
-
-        .footer b { color: var(--water); }
 
         /* Sidebar */
         .sidebar {
@@ -430,7 +432,7 @@
         @keyframes spin { to { transform: rotate(360deg); } }
 
         @media (max-width: 800px) {
-            .app { grid-template-columns: 1fr; grid-template-rows: auto 50vh auto auto; }
+            .app { grid-template-columns: 1fr; grid-template-rows: auto 50vh auto; }
             .sidebar { order: 3; max-height: 40vh; }
             .map-area { order: 2; }
         }
@@ -558,18 +560,19 @@
     <div class="map-area">
         <div id="map"></div>
         <canvas class="flow-canvas" id="flowCanvas"></canvas>
+        <div class="watermark">تطوير عائلة المحترش وعذا</div>
         <div class="legend-box" id="legendBox">
             <div style="font-weight:700;margin-bottom:4px;color:var(--text-primary);">دليل الألوان</div>
             <div class="legend-item"><div class="legend-dot" style="background:var(--peak);"></div> أعلى نقطة</div>
             <div class="legend-item"><div class="legend-dot" style="background:var(--danger);"></div> أخفض نقطة</div>
-            <div class="legend-item"><div class="legend-line" style="background:var(--water);"></div> أنهار افتراضية</div>
-            <div class="legend-item"><div class="legend-line" style="background:#ff6b6b;width:18px;height:4px;"></div> أطول نهر</div>
+            <div class="legend-item"><div class="legend-line" style="background:#ff4757;height:4px;"></div> نهر طويل</div>
+            <div class="legend-item"><div class="legend-line" style="background:#ffa502;height:3px;"></div> نهر متوسط</div>
+            <div class="legend-item"><div class="legend-line" style="background:#00b4d8;height:2px;"></div> نهر قصير</div>
+            <div class="legend-item"><div class="legend-line" style="background:#4a7a8f;height:1px;"></div> جدول</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#90e0ef;width:8px;height:8px;"></div> منبع</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#0077b6;width:8px;height:8px;"></div> مصب</div>
         </div>
     </div>
-
-    <footer class="footer">
-        🌊 تطوير <b>عائلة المحترش وعذا</b> &nbsp;|&nbsp; محاكي جريان المياه v1.0
-    </footer>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -933,224 +936,220 @@ function simulateFlow() {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> جاري المحاكاة...';
     clearRivers();
+    clearCanvas();
 
-    // Use setTimeout to not block UI
+    // HIDE elevation markers when showing rivers
+    markers.forEach(m => map.removeLayer(m));
+
     setTimeout(() => {
         const { width: w, height: h, data: dem, bounds } = elevationData;
 
-        // 1. Fill sinks (simplified - just smooth tiny depressions)
+        // 1. Fill sinks
         const filled = new Float32Array(dem);
         for (let pass = 0; pass < 3; pass++) {
             for (let r = 1; r < h - 1; r++) {
                 for (let c = 1; c < w - 1; c++) {
                     const idx = r * w + c;
-                    let minNeighbor = Infinity;
-                    for (let dr = -1; dr <= 1; dr++) {
-                        for (let dc = -1; dc <= 1; dc++) {
-                            if (dr === 0 && dc === 0) continue;
-                            minNeighbor = Math.min(minNeighbor, filled[(r + dr) * w + (c + dc)]);
-                        }
+                    let minN = Infinity;
+                    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+                        if (!dr && !dc) continue;
+                        minN = Math.min(minN, filled[(r+dr)*w+(c+dc)]);
                     }
-                    if (filled[idx] < minNeighbor) {
-                        filled[idx] = minNeighbor + 0.01;
-                    }
+                    if (filled[idx] < minN) filled[idx] = minN + 0.01;
                 }
             }
         }
 
         // 2. D8 Flow Direction
-        const flowDir = new Int8Array(w * h); // 0-7 direction, -1 = no flow (pit/edge)
-        const dx = [0, 1, 1, 1, 0, -1, -1, -1];
-        const dy = [-1, -1, 0, 1, 1, 1, 0, -1];
-
-        for (let r = 0; r < h; r++) {
-            for (let c = 0; c < w; c++) {
-                const idx = r * w + c;
-                if (r === 0 || r === h - 1 || c === 0 || c === w - 1) {
-                    flowDir[idx] = -1;
-                    continue;
-                }
-
-                let maxDrop = 0;
-                let bestDir = -1;
-                const elev = filled[idx];
-
-                for (let d = 0; d < 8; d++) {
-                    const nr = r + dy[d], nc = c + dx[d];
-                    const nElev = filled[nr * w + nc];
-                    const dist = (d % 2 === 0) ? 1 : Math.SQRT2;
-                    const drop = (elev - nElev) / dist;
-                    if (drop > maxDrop) {
-                        maxDrop = drop;
-                        bestDir = d;
-                    }
-                }
-                flowDir[idx] = bestDir;
+        const flowDir = new Int8Array(w * h);
+        const dx = [0,1,1,1,0,-1,-1,-1], dy = [-1,-1,0,1,1,1,0,-1];
+        for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+            const idx = r*w+c;
+            if (r===0||r===h-1||c===0||c===w-1) { flowDir[idx]=-1; continue; }
+            let maxDrop=0, best=-1;
+            for (let d=0;d<8;d++) {
+                const nr=r+dy[d], nc=c+dx[d];
+                const drop=(filled[idx]-filled[nr*w+nc])/((d%2===0)?1:Math.SQRT2);
+                if (drop>maxDrop) { maxDrop=drop; best=d; }
             }
+            flowDir[idx]=best;
         }
 
         // 3. Flow Accumulation
-        const flowAcc = new Float32Array(w * h).fill(1);
-
-        // Topological sort by elevation (highest first)
+        const flowAcc = new Float32Array(w*h).fill(1);
         const indices = [];
-        for (let i = 0; i < w * h; i++) indices.push(i);
-        indices.sort((a, b) => filled[b] - filled[a]);
-
+        for (let i=0;i<w*h;i++) indices.push(i);
+        indices.sort((a,b)=>filled[b]-filled[a]);
         for (const idx of indices) {
-            const dir = flowDir[idx];
-            if (dir < 0) continue;
-            const r = Math.floor(idx / w), c = idx % w;
-            const nr = r + dy[dir], nc = c + dx[dir];
-            if (nr >= 0 && nr < h && nc >= 0 && nc < w) {
-                flowAcc[nr * w + nc] += flowAcc[idx];
-            }
+            const dir=flowDir[idx]; if(dir<0) continue;
+            const r=Math.floor(idx/w), c=idx%w;
+            const nr=r+dy[dir], nc=c+dx[dir];
+            if(nr>=0&&nr<h&&nc>=0&&nc<w) flowAcc[nr*w+nc]+=flowAcc[idx];
         }
 
-        // Store flow accumulation for canvas rendering
         elevationData.flowAcc = flowAcc;
         elevationData.flowDir = flowDir;
         elevationData.filled = filled;
 
-        // 4. Extract rivers (cells with accumulation > threshold)
+        // 4. Find ALL river outlets (edge cells or pits with high accumulation)
         const threshold = flowThreshold;
-        const riverCells = [];
-        let maxAcc = 0, maxAccIdx = 0;
+        let maxAcc = 0;
+        for (let i=0;i<w*h;i++) if(flowAcc[i]>maxAcc) maxAcc=flowAcc[i];
 
-        for (let i = 0; i < w * h; i++) {
-            if (flowAcc[i] > threshold) {
-                riverCells.push(i);
-            }
-            if (flowAcc[i] > maxAcc) {
-                maxAcc = flowAcc[i];
-                maxAccIdx = i;
+        // Trace individual rivers: find all "mouth" points (edges with high acc)
+        const mouths = [];
+        for (let r=0; r<h; r++) for (let c=0; c<w; c++) {
+            const idx=r*w+c;
+            if (flowAcc[idx] < threshold * 3) continue;
+            if (r===0||r===h-1||c===0||c===w-1||flowDir[idx]===-1) {
+                mouths.push(idx);
             }
         }
 
-        // 5. Trace longest river (from max accumulation point upstream)
-        const longestRiver = [];
-        // Find the source: trace upstream from max accumulation
-        // Actually, trace the longest path that leads TO maxAccIdx
-        // We'll trace from the farthest source to the outlet
+        // Trace upstream from each mouth to find full river
+        function traceFullRiver(mouthIdx) {
+            const path = [];
+            const visited = new Set();
 
-        // Find all sources (headwaters) that flow into the main river
-        function traceUpstream(startIdx) {
-            let current = startIdx;
-            const path = [current];
-            const visited = new Set([current]);
-
-            // Go upstream: find which neighbors flow INTO current
-            while (true) {
-                const r = Math.floor(current / w), c = current % w;
-                let bestUpstream = -1;
-                let bestAcc = 0;
-
-                for (let d = 0; d < 8; d++) {
-                    const nr = r + dy[d], nc = c + dx[d];
-                    if (nr < 0 || nr >= h || nc < 0 || nc >= w) continue;
-                    const nIdx = nr * w + nc;
-                    if (visited.has(nIdx)) continue;
-
-                    // Check if this neighbor flows into current
-                    const nDir = flowDir[nIdx];
-                    if (nDir < 0) continue;
-                    const tnr = nr + dy[nDir], tnc = nc + dx[nDir];
-                    if (tnr === r && tnc === c) {
-                        if (flowAcc[nIdx] > bestAcc) {
-                            bestAcc = flowAcc[nIdx];
-                            bestUpstream = nIdx;
-                        }
+            function traceUp(idx) {
+                path.push(idx);
+                visited.add(idx);
+                const r=Math.floor(idx/w), c=idx%w;
+                let bestUp=-1, bestAcc=0;
+                for (let d=0;d<8;d++) {
+                    const nr=r+dy[d], nc=c+dx[d];
+                    if(nr<0||nr>=h||nc<0||nc>=w) continue;
+                    const nIdx=nr*w+nc;
+                    if(visited.has(nIdx)) continue;
+                    if(flowAcc[nIdx]<threshold) continue;
+                    const nDir=flowDir[nIdx]; if(nDir<0) continue;
+                    const tnr=nr+dy[nDir], tnc=nc+dx[nDir];
+                    if(tnr===r&&tnc===c && flowAcc[nIdx]>bestAcc) {
+                        bestAcc=flowAcc[nIdx]; bestUp=nIdx;
                     }
                 }
-
-                if (bestUpstream === -1) break;
-                path.push(bestUpstream);
-                visited.add(bestUpstream);
-                current = bestUpstream;
+                if(bestUp!==-1) traceUp(bestUp);
             }
-            return path;
+
+            traceUp(mouthIdx);
+            return path.reverse(); // source to mouth
         }
 
-        // Trace downstream from max acc to outlet
-        function traceDownstream(startIdx) {
-            const path = [startIdx];
-            let current = startIdx;
-            const visited = new Set([current]);
-            while (true) {
-                const dir = flowDir[current];
-                if (dir < 0) break;
-                const r = Math.floor(current / w), c = current % w;
-                const nr = r + dy[dir], nc = c + dx[dir];
-                if (nr < 0 || nr >= h || nc < 0 || nc >= w) break;
-                const nIdx = nr * w + nc;
-                if (visited.has(nIdx)) break;
-                path.push(nIdx);
-                visited.add(nIdx);
-                current = nIdx;
-            }
-            return path;
+        // Trace all rivers
+        const allRivers = [];
+        const globalVisited = new Set();
+        // Sort mouths by accumulation descending
+        mouths.sort((a,b) => flowAcc[b]-flowAcc[a]);
+
+        for (const m of mouths) {
+            if (globalVisited.has(m)) continue;
+            const river = traceFullRiver(m);
+            if (river.length < 5) continue; // skip tiny streams
+            river.forEach(idx => globalVisited.add(idx));
+            
+            // Convert to latlng and calc length
+            const latlngs = river.map(idx => {
+                const r=Math.floor(idx/w), c=idx%w;
+                return [
+                    bounds.north-(r/(h-1))*(bounds.north-bounds.south),
+                    bounds.west+(c/(w-1))*(bounds.east-bounds.west)
+                ];
+            });
+
+            let len = 0;
+            for (let i=1;i<latlngs.length;i++) len += haversine(latlngs[i-1][0],latlngs[i-1][1],latlngs[i][0],latlngs[i][1]);
+
+            allRivers.push({ latlngs, length: len, cells: river.length, maxAcc: flowAcc[m] });
         }
 
-        const upstream = traceUpstream(maxAccIdx).reverse();
-        const downstream = traceDownstream(maxAccIdx);
-        const fullRiver = [...upstream, ...downstream.slice(1)];
+        // Sort by length
+        allRivers.sort((a,b) => b.length - a.length);
 
-        // Convert to latlng
-        const riverLatLngs = fullRiver.map(idx => {
-            const r = Math.floor(idx / w), c = idx % w;
-            const lat = bounds.north - (r / (h - 1)) * (bounds.north - bounds.south);
-            const lng = bounds.west + (c / (w - 1)) * (bounds.east - bounds.west);
-            return [lat, lng];
+        // Take top rivers (max 15)
+        const topRivers = allRivers.slice(0, 15);
+
+        // Color coding: rank by length
+        const riverColors = [
+            { color: '#ff4757', label: 'الأطول', weight: 4.5 },       // Red - longest
+            { color: '#ff6348', label: 'ثاني', weight: 3.5 },
+            { color: '#ffa502', label: 'ثالث', weight: 3 },
+            { color: '#ffbe76', label: 'رابع', weight: 2.5 },
+            { color: '#00b4d8', label: 'متوسط', weight: 2 },         // Blue - medium
+            { color: '#48cae4', label: 'متوسط', weight: 2 },
+            { color: '#90e0ef', label: 'متوسط', weight: 1.8 },
+            { color: '#a8dadc', label: 'قصير', weight: 1.5 },
+            { color: '#81b1cc', label: 'قصير', weight: 1.5 },
+            { color: '#6d99b5', label: 'قصير', weight: 1.2 },
+            { color: '#5a8a9f', label: 'جدول', weight: 1 },          // Dim - short
+            { color: '#4a7a8f', label: 'جدول', weight: 1 },
+            { color: '#3d6b7f', label: 'جدول', weight: 1 },
+            { color: '#305c6f', label: 'جدول', weight: 1 },
+            { color: '#264d5f', label: 'جدول', weight: 1 },
+        ];
+
+        // Draw rivers on map
+        topRivers.forEach((river, i) => {
+            const style = riverColors[Math.min(i, riverColors.length-1)];
+            const line = L.polyline(river.latlngs, {
+                color: style.color, weight: style.weight, opacity: 0.9,
+                lineCap: 'round', lineJoin: 'round'
+            }).addTo(map);
+            line.bindPopup(`<div style="text-align:center;font-family:Cairo;">
+                <div style="font-size:13px;font-weight:700;color:${style.color};">نهر #${i+1}</div>
+                <div style="font-family:'JetBrains Mono';font-size:16px;font-weight:700;color:${style.color};">${river.length.toFixed(2)} كم</div>
+                <div style="font-size:10px;color:#7b8ba8;">${river.cells} خلية</div>
+            </div>`, { className: 'custom-popup' });
+            riverLayers.push(line);
         });
 
-        // Calculate river length
-        let riverLength = 0;
-        for (let i = 1; i < riverLatLngs.length; i++) {
-            riverLength += haversine(riverLatLngs[i - 1][0], riverLatLngs[i - 1][1], riverLatLngs[i][0], riverLatLngs[i][1]);
+        // Source and mouth markers for longest river
+        if (topRivers.length > 0) {
+            const longest = topRivers[0];
+            const src = L.circleMarker(longest.latlngs[0], { radius: 7, fillColor: '#90e0ef', fillOpacity: 1, color: 'white', weight: 2 }).addTo(map);
+            src.bindPopup('<div style="text-align:center;font-family:Cairo;font-weight:700;color:#90e0ef;">💧 منبع أطول نهر</div>', { className: 'custom-popup' });
+            const mouth = L.circleMarker(longest.latlngs[longest.latlngs.length-1], { radius: 7, fillColor: '#0077b6', fillOpacity: 1, color: 'white', weight: 2 }).addTo(map);
+            mouth.bindPopup('<div style="text-align:center;font-family:Cairo;font-weight:700;color:#0077b6;">🌊 مصب أطول نهر</div>', { className: 'custom-popup' });
+            riverLayers.push(src, mouth);
         }
 
         // Draw flow on canvas
         syncCanvas();
         drawFlowOnCanvas();
 
-        // Draw longest river as polyline
-        if (riverLatLngs.length > 2) {
-            const line = L.polyline(riverLatLngs, {
-                color: '#ff6b6b', weight: 3.5, opacity: 0.9,
-                dashArray: null, lineCap: 'round', lineJoin: 'round'
-            }).addTo(map);
-            line.bindPopup(`<div style="text-align:center;font-family:Cairo;"><div style="font-size:14px;font-weight:700;color:#ff6b6b;">أطول نهر افتراضي</div><div style="font-family:'JetBrains Mono';font-size:18px;color:#ff6b6b;">${riverLength.toFixed(2)} كم</div></div>`, { className: 'custom-popup' });
-            riverLayers.push(line);
-        }
+        // Update legend
+        document.getElementById('legendBox').classList.add('visible');
 
-        // Source and mouth markers
-        if (riverLatLngs.length > 2) {
-            const src = L.circleMarker(riverLatLngs[0], { radius: 6, fillColor: '#90e0ef', fillOpacity: 1, color: 'white', weight: 2 }).addTo(map);
-            src.bindPopup('<div style="text-align:center;font-family:Cairo;font-size:12px;color:#90e0ef;font-weight:700;">منبع النهر</div>', { className: 'custom-popup' });
-            const mouth = L.circleMarker(riverLatLngs[riverLatLngs.length - 1], { radius: 6, fillColor: '#0077b6', fillOpacity: 1, color: 'white', weight: 2 }).addTo(map);
-            mouth.bindPopup('<div style="text-align:center;font-family:Cairo;font-size:12px;color:#0077b6;font-weight:700;">مصب النهر</div>', { className: 'custom-popup' });
-            riverLayers.push(src, mouth);
-        }
-
-        // Update results
+        // Build results
         const gLink = (lat, lng) => `https://www.google.com/maps?q=${lat},${lng}&z=15`;
         const existingResults = document.getElementById('resultsBox').innerHTML;
 
-        const riverStart = riverLatLngs[0] || [0, 0];
-        const riverEnd = riverLatLngs[riverLatLngs.length - 1] || [0, 0];
+        let riversHTML = '';
+        topRivers.slice(0, 5).forEach((river, i) => {
+            const style = riverColors[Math.min(i, riverColors.length-1)];
+            const start = river.latlngs[0];
+            const end = river.latlngs[river.latlngs.length-1];
+            riversHTML += `
+                <div class="res-card river" style="border-color:${style.color}30;">
+                    <div class="res-head">
+                        <span style="display:inline-block;width:14px;height:4px;border-radius:2px;background:${style.color};"></span>
+                        <span class="label" style="color:${style.color};">نهر #${i+1} ${i===0?'— الأطول':''}</span>
+                    </div>
+                    <div class="res-big" style="color:${style.color};">${river.length.toFixed(2)} <span class="res-unit">كم</span></div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+                        <a href="${gLink(start[0],start[1])}" target="_blank" class="gmaps">💧 المنبع</a>
+                        <a href="${gLink(end[0],end[1])}" target="_blank" class="gmaps">🌊 المصب</a>
+                    </div>
+                </div>
+            `;
+        });
+
+        const riverCellCount = allRivers.reduce((s, r) => s + r.cells, 0);
 
         document.getElementById('resultsBox').innerHTML = existingResults + `
-            <div class="res-card river">
-                <div class="res-head"><span class="icon">🌊</span><span class="label">أطول نهر افتراضي</span></div>
-                <div class="res-big">${riverLength.toFixed(2)} <span class="res-unit">كم</span></div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
-                    <a href="${gLink(riverStart[0], riverStart[1])}" target="_blank" class="gmaps">💧 المنبع</a>
-                    <a href="${gLink(riverEnd[0], riverEnd[1])}" target="_blank" class="gmaps">🌊 المصب</a>
-                </div>
-            </div>
+            ${riversHTML}
             <div class="stats-row">
-                <div class="stat-box"><div class="stat-num" style="color:var(--water);">${riverCells.length}</div><div class="stat-lbl">خلايا نهرية</div></div>
-                <div class="stat-box"><div class="stat-num" style="color:var(--water);">${fullRiver.length}</div><div class="stat-lbl">طول المسار</div></div>
+                <div class="stat-box"><div class="stat-num" style="color:var(--water);">${allRivers.length}</div><div class="stat-lbl">عدد الأنهار</div></div>
+                <div class="stat-box"><div class="stat-num" style="color:var(--water);">${riverCellCount}</div><div class="stat-lbl">خلايا نهرية</div></div>
                 <div class="stat-box"><div class="stat-num" style="color:var(--water);">${maxAcc.toFixed(0)}</div><div class="stat-lbl">أقصى تجمع</div></div>
                 <div class="stat-box"><div class="stat-num" style="color:var(--water);">${flowThreshold}</div><div class="stat-lbl">حد الأنهار</div></div>
             </div>
