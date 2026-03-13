@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>محاكي جريان المياه - Flow Simulator</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #060b14;
+            --bg-primary: #0a1020;
+            --bg-secondary: #0f1729;
+            --bg-card: #151f35;
+            --bg-card-hover: #1a2845;
+            --water: #00b4d8;
+            --water-glow: rgba(0, 180, 216, 0.4);
+            --water-dim: rgba(0, 180, 216, 0.1);
+            --river: #0096c7;
+            --accent: #00e5a0;
+            --accent-glow: rgba(0, 229, 160, 0.3);
+            --danger: #ff4757;
+            --peak: #ffd166;
+            --text-primary: #e2e8f5;
+            --text-secondary: #7b8ba8;
+            --text-dim: #3d4f6f;
+            --border: rgba(255, 255, 255, 0.06);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        .app {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 24px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .logo { display: flex; align-items: center; gap: 12px; }
+
+        .logo-icon {
+            width: 42px; height: 42px;
+            background: linear-gradient(135deg, var(--water), #0077b6);
+            border-radius: 11px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 4px 20px var(--water-glow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .logo-icon::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, transparent 40%, rgba(255,255,255,0.15));
+        }
+
+        .logo-text { font-size: 20px; font-weight: 900; }
+        .logo-text span { color: var(--water); }
+
+        .header-info {
+            display: flex; align-items: center; gap: 12px;
+        }
+
+        .badge {
+            padding: 5px 12px;
+            border-radius: 16px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-water {
+            background: var(--water-dim);
+            border: 1px solid rgba(0, 180, 216, 0.25);
+            color: var(--water);
+        }
+
+        .badge-free {
+            background: rgba(0, 229, 160, 0.08);
+            border: 1px solid rgba(0, 229, 160, 0.2);
+            color: var(--accent);
+        }
+
+        /* Footer */
+        .footer {
+            grid-column: 1 / -1;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 8px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            font-size: 11px; color: var(--text-dim);
+        }
+
+        .footer b { color: var(--water); }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--bg-primary);
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            padding: 16px;
+            display: flex; flex-direction: column; gap: 14px;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 3px; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--text-dim); border-radius: 3px; }
+
+        .section-label {
+            font-size: 10px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 2px;
+            color: var(--text-dim); margin-bottom: 2px;
+        }
+
+        /* How it works */
+        .how-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .how-step {
+            display: flex; align-items: flex-start; gap: 10px;
+            padding: 6px 0;
+        }
+
+        .how-step + .how-step { border-top: 1px solid var(--border); }
+
+        .how-num {
+            width: 22px; height: 22px; min-width: 22px;
+            background: var(--water-dim); color: var(--water);
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .how-text { font-size: 12px; color: var(--text-secondary); line-height: 1.5; }
+
+        /* Search */
+        .search-card {
+            background: linear-gradient(135deg, var(--bg-card), rgba(0, 180, 216, 0.04));
+            border: 1px solid rgba(0, 180, 216, 0.15);
+            border-radius: 12px;
+            padding: 14px;
+            position: relative;
+            overflow: visible;
+        }
+
+        .search-row {
+            display: flex; gap: 8px; position: relative;
+        }
+
+        .search-input {
+            flex: 1; padding: 9px 12px;
+            background: var(--bg-deep); border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text-primary);
+            font-family: 'Cairo', sans-serif; font-size: 13px; outline: none;
+        }
+
+        .search-input:focus { border-color: var(--water); box-shadow: 0 0 0 3px var(--water-dim); }
+        .search-input::placeholder { color: var(--text-dim); }
+
+        .search-go {
+            padding: 9px 14px;
+            background: linear-gradient(135deg, var(--water), #0077b6);
+            border: none; border-radius: 8px; color: white;
+            font-family: 'Cairo', sans-serif; font-size: 12px; font-weight: 700;
+            cursor: pointer; white-space: nowrap;
+        }
+
+        .search-go:hover { box-shadow: 0 4px 15px var(--water-glow); }
+        .search-go:disabled { opacity: 0.4; cursor: not-allowed; }
+
+        .search-results {
+            position: absolute; top: 100%; left: 0; right: 0;
+            background: var(--bg-card); border: 1px solid rgba(0,180,216,0.3);
+            border-radius: 8px; margin-top: 6px; max-height: 220px;
+            overflow-y: auto; z-index: 9999;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+            display: none;
+        }
+
+        .search-results.visible { display: block; }
+
+        .sr-item {
+            padding: 10px 12px; cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            font-size: 13px; color: var(--text-primary);
+            transition: background 0.15s;
+        }
+
+        .sr-item:hover { background: var(--bg-card-hover); }
+        .sr-item:last-child { border-bottom: none; }
+        .sr-item small { display: block; color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+
+        .active-loc {
+            display: none; align-items: center; gap: 8px;
+            margin-top: 8px; padding: 6px 10px;
+            background: var(--bg-deep); border-radius: 6px; font-size: 12px;
+        }
+
+        .active-loc.visible { display: flex; }
+        .active-loc span { flex: 1; color: var(--water); font-weight: 700; }
+
+        .active-loc button {
+            background: none; border: none; color: var(--text-dim);
+            cursor: pointer; font-size: 13px;
+        }
+
+        /* Controls */
+        .controls {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+        }
+
+        .ctrl-btn {
+            padding: 9px 8px; border: 1px solid var(--border);
+            border-radius: 8px; background: var(--bg-card);
+            color: var(--text-secondary); font-family: 'Cairo', sans-serif;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+            transition: all 0.2s;
+        }
+
+        .ctrl-btn:hover { border-color: var(--water); color: var(--water); }
+
+        .ctrl-btn.scan {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, var(--water), #0077b6);
+            color: white; border: none; font-size: 13px; font-weight: 700;
+            padding: 11px;
+        }
+
+        .ctrl-btn.scan:hover { box-shadow: 0 6px 20px var(--water-glow); transform: translateY(-1px); }
+        .ctrl-btn.scan:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .ctrl-btn.flow {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #0077b6, #023e8a);
+            color: white; border: none; font-size: 13px; font-weight: 700;
+            padding: 11px;
+        }
+
+        .ctrl-btn.flow:hover { box-shadow: 0 6px 20px rgba(0, 119, 183, 0.4); transform: translateY(-1px); }
+        .ctrl-btn.flow:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        .ctrl-btn.danger { border-color: rgba(255,71,87,0.2); color: var(--danger); }
+        .ctrl-btn.danger:hover { background: rgba(255,71,87,0.08); border-color: var(--danger); }
+
+        /* Slider */
+        .slider-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 12px;
+        }
+
+        .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .slider-title { font-size: 12px; font-weight: 600; }
+
+        .slider-val {
+            font-family: 'JetBrains Mono', monospace; font-size: 11px;
+            color: var(--water); background: var(--water-dim);
+            padding: 1px 7px; border-radius: 4px;
+        }
+
+        input[type="range"] {
+            width: 100%; -webkit-appearance: none; height: 3px;
+            background: var(--bg-deep); border-radius: 3px; outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 16px; height: 16px;
+            background: var(--water); border-radius: 50%; cursor: pointer;
+            box-shadow: 0 2px 8px var(--water-glow);
+        }
+
+        /* Results */
+        .results-box { display: flex; flex-direction: column; gap: 8px; }
+
+        .res-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 14px;
+            animation: slideUp 0.35s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .res-card.peak { border-color: rgba(255, 209, 102, 0.3); }
+        .res-card.valley { border-color: rgba(255, 71, 87, 0.3); }
+        .res-card.river { border-color: rgba(0, 180, 216, 0.3); background: linear-gradient(135deg, var(--bg-card), rgba(0, 180, 216, 0.04)); }
+
+        .res-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+        .res-head .icon { font-size: 16px; }
+        .res-head .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+        .res-card.peak .label { color: var(--peak); }
+        .res-card.valley .label { color: var(--danger); }
+        .res-card.river .label { color: var(--water); }
+
+        .res-big {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 32px; font-weight: 700; line-height: 1; margin-bottom: 6px;
+        }
+
+        .res-card.peak .res-big { color: var(--peak); }
+        .res-card.valley .res-big { color: var(--danger); }
+        .res-card.river .res-big { color: var(--water); }
+
+        .res-unit { font-size: 14px; color: var(--text-secondary); font-weight: 400; }
+
+        .res-coords {
+            font-family: 'JetBrains Mono', monospace; font-size: 10px;
+            color: var(--text-dim); background: var(--bg-deep);
+            padding: 4px 8px; border-radius: 5px; display: inline-block;
+            margin-bottom: 6px;
+        }
+
+        .gmaps {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 5px 10px; background: rgba(66,133,244,0.08);
+            border: 1px solid rgba(66,133,244,0.25); border-radius: 6px;
+            color: #4285f4; font-size: 11px; font-weight: 600;
+            text-decoration: none; transition: all 0.2s;
+        }
+
+        .gmaps:hover { background: rgba(66,133,244,0.15); }
+
+        .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+        .stat-box {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px; text-align: center;
+        }
+
+        .stat-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 16px; font-weight: 700;
+        }
+
+        .stat-lbl {
+            font-size: 9px; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 0.8px; margin-top: 1px;
+        }
+
+        /* Progress */
+        .progress-box {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 14px;
+        }
+
+        .progress-top { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+
+        .progress-bar { height: 5px; background: var(--bg-deep); border-radius: 5px; overflow: hidden; }
+
+        .progress-fill {
+            height: 100%; border-radius: 5px; transition: width 0.3s;
+            background: linear-gradient(90deg, var(--water), #0077b6);
+            box-shadow: 0 0 8px var(--water-glow);
+        }
+
+        /* Map */
+        .map-area { position: relative; overflow: hidden; min-height: 0; }
+        #map { width: 100%; height: 100%; background: var(--bg-deep); min-height: 400px; }
+
+        .leaflet-container { background: var(--bg-deep) !important; }
+
+        .custom-popup .leaflet-popup-content-wrapper {
+            background: var(--bg-card); color: var(--text-primary);
+            border: 1px solid var(--border); border-radius: 8px;
+            font-family: 'Cairo', sans-serif;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+
+        .custom-popup .leaflet-popup-tip { background: var(--bg-card); }
+
+        .legend-box {
+            position: absolute; top: 12px; left: 12px;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 8px; padding: 10px; z-index: 1000;
+            display: none; font-size: 10px;
+        }
+
+        .legend-box.visible { display: block; }
+
+        .legend-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; color: var(--text-secondary); }
+
+        .legend-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+        }
+
+        .legend-line {
+            width: 18px; height: 3px; border-radius: 2px;
+        }
+
+        .empty-msg {
+            text-align: center; padding: 16px; color: var(--text-dim); font-size: 12px;
+        }
+
+        .empty-msg .big { font-size: 36px; opacity: 0.4; margin-bottom: 6px; }
+
+        .spinner {
+            display: inline-block; width: 12px; height: 12px;
+            border: 2px solid rgba(255,255,255,0.3); border-top-color: white;
+            border-radius: 50%; animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        @media (max-width: 800px) {
+            .app { grid-template-columns: 1fr; grid-template-rows: auto 50vh auto auto; }
+            .sidebar { order: 3; max-height: 40vh; }
+            .map-area { order: 2; }
+        }
+
+        /* Canvas overlay for flow visualization */
+        .flow-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 0; height: 0;
+            pointer-events: none;
+            z-index: 450;
+            opacity: 0.85;
+        }
+
+        /* Leaflet draw toolbar fix */
+        .leaflet-draw-toolbar a {
+            background-color: var(--bg-card) !important;
+            border-color: var(--border) !important;
+        }
+        .leaflet-draw-actions a {
+            background-color: var(--bg-card) !important;
+            color: var(--text-primary) !important;
+        }
+    </style>
+</head>
+<body>
+<div class="app">
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">🌊</div>
+            <div class="logo-text">محاكي <span>جريان المياه</span></div>
+        </div>
+        <div class="header-info">
+            <span class="badge badge-water">Terrarium DEM Tiles</span>
+            <span class="badge badge-free">مجاني بدون مفتاح</span>
+        </div>
+    </header>
+
+    <aside class="sidebar">
+        <div>
+            <div class="section-label">كيف يشتغل</div>
+            <div class="how-card">
+                <div class="how-step">
+                    <div class="how-num">1</div>
+                    <div class="how-text">ابحث عن مدينة أو حدد منطقة على الخريطة</div>
+                </div>
+                <div class="how-step">
+                    <div class="how-num">2</div>
+                    <div class="how-text">اضغط "مسح الارتفاعات" لتحميل بيانات التضاريس عالية الدقة</div>
+                </div>
+                <div class="how-step">
+                    <div class="how-num">3</div>
+                    <div class="how-text">اضغط "محاكاة جريان المياه" لرؤية الأنهار الافتراضية وأطول مسار مائي</div>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-label">بحث بالمدينة</div>
+            <div class="search-card">
+                <div class="search-row">
+                    <input class="search-input" id="searchInput" placeholder="الزلفي، أبها، الطائف..." autocomplete="off">
+                    <button class="search-go" id="searchBtn" onclick="searchCity()">بحث</button>
+                    <div class="search-results" id="searchResults"></div>
+                </div>
+                <div class="active-loc" id="activeLoc">
+                    <span id="activeLocName"></span>
+                    <button onclick="clearSelection()">✕</button>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-label">أدوات</div>
+            <div class="controls">
+                <button class="ctrl-btn" onclick="drawRect()">▭ مستطيل</button>
+                <button class="ctrl-btn" onclick="locateMe()">◎ موقعي</button>
+                <button class="ctrl-btn danger" onclick="clearAll()">✕ مسح الكل</button>
+                <button class="ctrl-btn" onclick="drawRect()">⬠ تحديد</button>
+                <button class="ctrl-btn scan" id="btnScan" disabled onclick="scanElevation()">
+                    ⛰️ مسح الارتفاعات (دقة عالية)
+                </button>
+                <button class="ctrl-btn flow" id="btnFlow" disabled onclick="simulateFlow()">
+                    🌊 محاكاة جريان المياه
+                </button>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-label">إعدادات</div>
+            <div class="slider-card">
+                <div class="slider-header">
+                    <span class="slider-title">دقة المسح</span>
+                    <span class="slider-val" id="resDisplay">256 × 256</span>
+                </div>
+                <input type="range" id="resSlider" min="64" max="512" step="64" value="256" oninput="updateRes(this.value)">
+                <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px;">
+                    <span>سريع (64)</span>
+                    <span>دقيق (512)</span>
+                </div>
+            </div>
+            <div class="slider-card" style="margin-top:6px;">
+                <div class="slider-header">
+                    <span class="slider-title">حساسية الأنهار</span>
+                    <span class="slider-val" id="threshDisplay">50</span>
+                </div>
+                <input type="range" id="threshSlider" min="10" max="200" step="10" value="50" oninput="updateThresh(this.value)">
+                <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-dim);margin-top:3px;">
+                    <span>أنهار كثيرة</span>
+                    <span>أنهار رئيسية فقط</span>
+                </div>
+            </div>
+        </div>
+
+        <div>
+            <div class="section-label">النتائج</div>
+            <div id="emptyState" class="empty-msg">
+                <div class="big">🌊</div>
+                حدد منطقة لبدء المسح والمحاكاة
+            </div>
+            <div class="results-box" id="resultsBox" style="display:none;"></div>
+        </div>
+    </aside>
+
+    <div class="map-area">
+        <div id="map"></div>
+        <canvas class="flow-canvas" id="flowCanvas"></canvas>
+        <div class="legend-box" id="legendBox">
+            <div style="font-weight:700;margin-bottom:4px;color:var(--text-primary);">دليل الألوان</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--peak);"></div> أعلى نقطة</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--danger);"></div> أخفض نقطة</div>
+            <div class="legend-item"><div class="legend-line" style="background:var(--water);"></div> أنهار افتراضية</div>
+            <div class="legend-item"><div class="legend-line" style="background:#ff6b6b;width:18px;height:4px;"></div> أطول نهر</div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        🌊 تطوير <b>عائلة المحترش وعذا</b> &nbsp;|&nbsp; محاكي جريان المياه v1.0
+    </footer>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script>
+// ==================== STATE ====================
+let map, drawnItems;
+let currentBounds = null;
+let selectedCity = null;
+let resolution = 256;
+let flowThreshold = 50;
+let elevationData = null; // {width, height, data[], bounds}
+let markers = [];
+let riverLayers = [];
+let isScanning = false;
+
+// ==================== INIT ====================
+function initMap() {
+    map = L.map('map', { center: [24.7, 46.7], zoom: 6, zoomControl: false });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '© OpenStreetMap © CARTO', maxZoom: 19
+    }).addTo(map);
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    document.getElementById('searchInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') searchCity();
+    });
+
+    document.addEventListener('click', e => {
+        if (!document.querySelector('.search-card').contains(e.target)) {
+            document.getElementById('searchResults').classList.remove('visible');
+        }
+    });
+
+    // Resize canvas with map
+    map.on('move zoom resize', syncCanvas);
+    window.addEventListener('resize', syncCanvas);
+}
+
+function syncCanvas() {
+    const canvas = document.getElementById('flowCanvas');
+    const container = map.getContainer();
+    canvas.width = container.offsetWidth;
+    canvas.height = container.offsetHeight;
+    canvas.style.width = container.offsetWidth + 'px';
+    canvas.style.height = container.offsetHeight + 'px';
+    // Redraw if we have flow data
+    if (elevationData && elevationData.flowAcc) {
+        drawFlowOnCanvas();
+    }
+}
+
+// ==================== SEARCH ====================
+async function searchCity() {
+    const q = document.getElementById('searchInput').value.trim();
+    if (!q) return;
+    const btn = document.getElementById('searchBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    try {
+        const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&polygon_geojson=1&accept-language=ar,en`, { headers: { 'User-Agent': 'FlowSim/1.0' } });
+        const data = await r.json();
+        const div = document.getElementById('searchResults');
+        if (!data.length) {
+            div.innerHTML = '<div style="padding:12px;text-align:center;color:var(--text-dim);">لا نتائج</div>';
+        } else {
+            div.innerHTML = data.map((d, i) => `<div class="sr-item" onclick="pickCity(${i})">${d.name || q}<small>${d.display_name.split(',').slice(1, 3).join('، ')}</small></div>`).join('');
+            window._cityResults = data;
+        }
+        div.classList.add('visible');
+    } catch { }
+    btn.disabled = false;
+    btn.innerHTML = 'بحث';
+}
+
+function pickCity(i) {
+    const c = window._cityResults[i];
+    document.getElementById('searchResults').classList.remove('visible');
+    clearAll();
+    selectedCity = c;
+
+    const bb = c.boundingbox;
+    const bounds = L.latLngBounds([parseFloat(bb[0]), parseFloat(bb[2])], [parseFloat(bb[1]), parseFloat(bb[3])]);
+
+    if (c.geojson && (c.geojson.type === 'Polygon' || c.geojson.type === 'MultiPolygon')) {
+        L.geoJSON(c.geojson, { style: { color: '#00b4d8', fillColor: 'rgba(0,180,216,0.06)', weight: 2, dashArray: '6,4' } }).addTo(drawnItems);
+    }
+
+    const rect = L.rectangle(bounds, { color: '#00b4d8', fillColor: 'rgba(0,180,216,0.05)', weight: 1.5, dashArray: '4,4' });
+    drawnItems.addLayer(rect);
+    currentBounds = bounds;
+    map.flyToBounds(bounds, { padding: [40, 40], maxZoom: 13 });
+
+    document.getElementById('activeLocName').textContent = c.name;
+    document.getElementById('activeLoc').classList.add('visible');
+    document.getElementById('btnScan').disabled = false;
+}
+
+function clearSelection() {
+    selectedCity = null;
+    document.getElementById('activeLoc').classList.remove('visible');
+    document.getElementById('searchInput').value = '';
+}
+
+// ==================== DRAW ====================
+let drawHandler = null;
+function drawRect() {
+    if (drawHandler) drawHandler.disable();
+    drawHandler = new L.Draw.Rectangle(map, {
+        shapeOptions: { color: '#00b4d8', fillColor: 'rgba(0,180,216,0.05)', weight: 1.5 }
+    });
+    drawHandler.enable();
+
+    map.once(L.Draw.Event.CREATED, e => {
+        clearAll();
+        drawnItems.addLayer(e.layer);
+        currentBounds = e.layer.getBounds();
+        document.getElementById('btnScan').disabled = false;
+    });
+}
+
+function locateMe() { map.locate({ setView: true, maxZoom: 13 }); }
+
+function clearAll() {
+    drawnItems.clearLayers();
+    clearMarkers();
+    clearRivers();
+    clearCanvas();
+    currentBounds = null;
+    elevationData = null;
+    document.getElementById('btnScan').disabled = true;
+    document.getElementById('btnFlow').disabled = true;
+    document.getElementById('legendBox').classList.remove('visible');
+    document.getElementById('resultsBox').style.display = 'none';
+    document.getElementById('resultsBox').innerHTML = '';
+    document.getElementById('emptyState').style.display = 'block';
+    clearSelection();
+}
+
+function clearMarkers() { markers.forEach(m => map.removeLayer(m)); markers = []; }
+function clearRivers() { riverLayers.forEach(l => map.removeLayer(l)); riverLayers = []; }
+function clearCanvas() {
+    const c = document.getElementById('flowCanvas');
+    c.getContext('2d').clearRect(0, 0, c.width, c.height);
+}
+
+function updateRes(v) { resolution = parseInt(v); document.getElementById('resDisplay').textContent = `${v} × ${v}`; }
+function updateThresh(v) { flowThreshold = parseInt(v); document.getElementById('threshDisplay').textContent = v; }
+
+// ==================== ELEVATION SCAN (Terrarium Tiles) ====================
+// Terrarium encoding: elevation = (R * 256 + G + B / 256) - 32768
+function terrariumDecode(r, g, b) {
+    return (r * 256 + g + b / 256) - 32768;
+}
+
+async function loadTile(z, x, y) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        // Use AWS Terrarium tiles (free, no key)
+        img.src = `https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve(ctx.getImageData(0, 0, 256, 256));
+        };
+        img.onerror = () => reject(new Error(`Tile ${z}/${x}/${y} failed`));
+    });
+}
+
+function latLngToTile(lat, lng, zoom) {
+    const n = Math.pow(2, zoom);
+    const x = Math.floor((lng + 180) / 360 * n);
+    const latRad = lat * Math.PI / 180;
+    const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
+    return { x, y };
+}
+
+function tileToLatLng(x, y, zoom) {
+    const n = Math.pow(2, zoom);
+    const lng = x / n * 360 - 180;
+    const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n)));
+    const lat = latRad * 180 / Math.PI;
+    return { lat, lng };
+}
+
+async function scanElevation() {
+    if (!currentBounds || isScanning) return;
+    isScanning = true;
+
+    const scanBtn = document.getElementById('btnScan');
+    scanBtn.disabled = true;
+    scanBtn.innerHTML = '<span class="spinner"></span> جاري المسح...';
+    document.getElementById('btnFlow').disabled = true;
+    clearMarkers(); clearRivers(); clearCanvas();
+
+    const box = document.getElementById('resultsBox');
+    document.getElementById('emptyState').style.display = 'none';
+    box.style.display = 'flex';
+
+    const south = currentBounds.getSouth(), north = currentBounds.getNorth();
+    const west = currentBounds.getWest(), east = currentBounds.getEast();
+
+    // Choose zoom level based on area size for ~10m resolution
+    const latSpan = north - south;
+    const zoom = Math.min(14, Math.max(10, Math.round(14 - Math.log2(latSpan * 111 / 2))));
+
+    const tileMin = latLngToTile(north, west, zoom);
+    const tileMax = latLngToTile(south, east, zoom);
+
+    const tilesX = tileMax.x - tileMin.x + 1;
+    const tilesY = tileMax.y - tileMin.y + 1;
+    const totalTiles = tilesX * tilesY;
+
+    box.innerHTML = `<div class="progress-box"><div class="progress-top"><span>تحميل ${totalTiles} tile بدقة zoom ${zoom}...</span><span id="pPct">0%</span></div><div class="progress-bar"><div class="progress-fill" id="pFill" style="width:0%"></div></div></div>`;
+
+    try {
+        // Load all tiles
+        const bigCanvas = document.createElement('canvas');
+        bigCanvas.width = tilesX * 256;
+        bigCanvas.height = tilesY * 256;
+        const bigCtx = bigCanvas.getContext('2d');
+
+        let loaded = 0;
+        const loadPromises = [];
+
+        for (let ty = tileMin.y; ty <= tileMax.y; ty++) {
+            for (let tx = tileMin.x; tx <= tileMax.x; tx++) {
+                const lx = tx - tileMin.x;
+                const ly = ty - tileMin.y;
+                loadPromises.push(
+                    loadTile(zoom, tx, ty).then(imgData => {
+                        bigCtx.putImageData(imgData, lx * 256, ly * 256);
+                        loaded++;
+                        const pct = Math.round(loaded / totalTiles * 100);
+                        const f = document.getElementById('pFill');
+                        const t = document.getElementById('pPct');
+                        if (f) f.style.width = pct + '%';
+                        if (t) t.textContent = pct + '%';
+                    }).catch(() => { loaded++; })
+                );
+            }
+        }
+
+        await Promise.all(loadPromises);
+
+        // Sample to our resolution grid
+        const w = resolution, h = resolution;
+        const dem = new Float32Array(w * h);
+        const fullImgData = bigCtx.getImageData(0, 0, bigCanvas.width, bigCanvas.height);
+
+        const topLeft = tileToLatLng(tileMin.x, tileMin.y, zoom);
+        const bottomRight = tileToLatLng(tileMax.x + 1, tileMax.y + 1, zoom);
+
+        let highest = { elev: -Infinity, lat: 0, lng: 0 };
+        let lowest = { elev: Infinity, lat: 0, lng: 0 };
+        let totalElev = 0;
+
+        for (let row = 0; row < h; row++) {
+            for (let col = 0; col < w; col++) {
+                // Map grid cell to lat/lng
+                const lat = north - (row / (h - 1)) * (north - south);
+                const lng = west + (col / (w - 1)) * (east - west);
+
+                // Map lat/lng to pixel in big canvas
+                const px = Math.floor(((lng - topLeft.lng) / (bottomRight.lng - topLeft.lng)) * bigCanvas.width);
+                const py = Math.floor(((topLeft.lat - lat) / (topLeft.lat - bottomRight.lat)) * bigCanvas.height);
+
+                const cx = Math.max(0, Math.min(bigCanvas.width - 1, px));
+                const cy = Math.max(0, Math.min(bigCanvas.height - 1, py));
+
+                const idx = (cy * bigCanvas.width + cx) * 4;
+                const r = fullImgData.data[idx];
+                const g = fullImgData.data[idx + 1];
+                const b = fullImgData.data[idx + 2];
+
+                const elev = terrariumDecode(r, g, b);
+                dem[row * w + col] = elev;
+
+                if (elev > highest.elev) highest = { elev, lat, lng };
+                if (elev < lowest.elev) lowest = { elev, lat, lng };
+                totalElev += elev;
+            }
+        }
+
+        const avgElev = totalElev / (w * h);
+        const diff = highest.elev - lowest.elev;
+
+        // Store for flow simulation
+        elevationData = { width: w, height: h, data: dem, bounds: { north, south, east, west } };
+
+        // Display heatmap markers (sampled)
+        const sampleStep = Math.max(1, Math.floor(w / 40));
+        for (let row = 0; row < h; row += sampleStep) {
+            for (let col = 0; col < w; col += sampleStep) {
+                const elev = dem[row * w + col];
+                const lat = north - (row / (h - 1)) * (north - south);
+                const lng = west + (col / (w - 1)) * (east - west);
+                const color = elevColor(elev, lowest.elev, highest.elev);
+                const m = L.circleMarker([lat, lng], {
+                    radius: 3, fillColor: color, fillOpacity: 0.6, stroke: false
+                }).addTo(map);
+                m.bindPopup(`<div style="text-align:center;font-family:Cairo;"><div style="font-family:'JetBrains Mono';font-size:18px;font-weight:700;color:${color}">${elev.toFixed(1)}م</div><div style="font-size:10px;color:#7b8ba8;">${lat.toFixed(5)}, ${lng.toFixed(5)}</div></div>`, { className: 'custom-popup' });
+                markers.push(m);
+            }
+        }
+
+        // Peak & valley markers
+        const peakIcon = makeIcon('#ffd166', '▲');
+        const valleyIcon = makeIcon('#ff4757', '▼');
+        const hm = L.marker([highest.lat, highest.lng], { icon: peakIcon }).addTo(map);
+        const lm = L.marker([lowest.lat, lowest.lng], { icon: valleyIcon }).addTo(map);
+        markers.push(hm, lm);
+
+        const gLink = (lat, lng) => `https://www.google.com/maps?q=${lat},${lng}&z=15`;
+
+        box.innerHTML = `
+            <div class="res-card peak">
+                <div class="res-head"><span class="icon">🔺</span><span class="label">أعلى نقطة</span></div>
+                <div class="res-big">${highest.elev.toFixed(1)} <span class="res-unit">م</span></div>
+                <div class="res-coords">📍 ${highest.lat.toFixed(5)}, ${highest.lng.toFixed(5)}</div>
+                <a href="${gLink(highest.lat, highest.lng)}" target="_blank" class="gmaps">🗺️ Google Maps</a>
+            </div>
+            <div class="res-card valley">
+                <div class="res-head"><span class="icon">🔻</span><span class="label">أخفض نقطة</span></div>
+                <div class="res-big">${lowest.elev.toFixed(1)} <span class="res-unit">م</span></div>
+                <div class="res-coords">📍 ${lowest.lat.toFixed(5)}, ${lowest.lng.toFixed(5)}</div>
+                <a href="${gLink(lowest.lat, lowest.lng)}" target="_blank" class="gmaps">🗺️ Google Maps</a>
+            </div>
+            <div class="stats-row">
+                <div class="stat-box"><div class="stat-num">${diff.toFixed(1)}م</div><div class="stat-lbl">فرق الارتفاع</div></div>
+                <div class="stat-box"><div class="stat-num">${avgElev.toFixed(1)}م</div><div class="stat-lbl">المتوسط</div></div>
+                <div class="stat-box"><div class="stat-num">${w}×${h}</div><div class="stat-lbl">دقة المسح</div></div>
+                <div class="stat-box"><div class="stat-num">~${((north-south)*111000/h).toFixed(0)}م</div><div class="stat-lbl">دقة البكسل</div></div>
+            </div>
+        `;
+
+        document.getElementById('btnFlow').disabled = false;
+        document.getElementById('legendBox').classList.add('visible');
+
+    } catch (err) {
+        box.innerHTML = `<div class="empty-msg"><div class="big">❌</div>${err.message}</div>`;
+    }
+
+    isScanning = false;
+    scanBtn.disabled = false;
+    scanBtn.innerHTML = '⛰️ مسح الارتفاعات (دقة عالية)';
+}
+
+// ==================== FLOW SIMULATION ====================
+function simulateFlow() {
+    if (!elevationData) return;
+
+    const btn = document.getElementById('btnFlow');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> جاري المحاكاة...';
+    clearRivers();
+
+    // Use setTimeout to not block UI
+    setTimeout(() => {
+        const { width: w, height: h, data: dem, bounds } = elevationData;
+
+        // 1. Fill sinks (simplified - just smooth tiny depressions)
+        const filled = new Float32Array(dem);
+        for (let pass = 0; pass < 3; pass++) {
+            for (let r = 1; r < h - 1; r++) {
+                for (let c = 1; c < w - 1; c++) {
+                    const idx = r * w + c;
+                    let minNeighbor = Infinity;
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            if (dr === 0 && dc === 0) continue;
+                            minNeighbor = Math.min(minNeighbor, filled[(r + dr) * w + (c + dc)]);
+                        }
+                    }
+                    if (filled[idx] < minNeighbor) {
+                        filled[idx] = minNeighbor + 0.01;
+                    }
+                }
+            }
+        }
+
+        // 2. D8 Flow Direction
+        const flowDir = new Int8Array(w * h); // 0-7 direction, -1 = no flow (pit/edge)
+        const dx = [0, 1, 1, 1, 0, -1, -1, -1];
+        const dy = [-1, -1, 0, 1, 1, 1, 0, -1];
+
+        for (let r = 0; r < h; r++) {
+            for (let c = 0; c < w; c++) {
+                const idx = r * w + c;
+                if (r === 0 || r === h - 1 || c === 0 || c === w - 1) {
+                    flowDir[idx] = -1;
+                    continue;
+                }
+
+                let maxDrop = 0;
+                let bestDir = -1;
+                const elev = filled[idx];
+
+                for (let d = 0; d < 8; d++) {
+                    const nr = r + dy[d], nc = c + dx[d];
+                    const nElev = filled[nr * w + nc];
+                    const dist = (d % 2 === 0) ? 1 : Math.SQRT2;
+                    const drop = (elev - nElev) / dist;
+                    if (drop > maxDrop) {
+                        maxDrop = drop;
+                        bestDir = d;
+                    }
+                }
+                flowDir[idx] = bestDir;
+            }
+        }
+
+        // 3. Flow Accumulation
+        const flowAcc = new Float32Array(w * h).fill(1);
+
+        // Topological sort by elevation (highest first)
+        const indices = [];
+        for (let i = 0; i < w * h; i++) indices.push(i);
+        indices.sort((a, b) => filled[b] - filled[a]);
+
+        for (const idx of indices) {
+            const dir = flowDir[idx];
+            if (dir < 0) continue;
+            const r = Math.floor(idx / w), c = idx % w;
+            const nr = r + dy[dir], nc = c + dx[dir];
+            if (nr >= 0 && nr < h && nc >= 0 && nc < w) {
+                flowAcc[nr * w + nc] += flowAcc[idx];
+            }
+        }
+
+        // Store flow accumulation for canvas rendering
+        elevationData.flowAcc = flowAcc;
+        elevationData.flowDir = flowDir;
+        elevationData.filled = filled;
+
+        // 4. Extract rivers (cells with accumulation > threshold)
+        const threshold = flowThreshold;
+        const riverCells = [];
+        let maxAcc = 0, maxAccIdx = 0;
+
+        for (let i = 0; i < w * h; i++) {
+            if (flowAcc[i] > threshold) {
+                riverCells.push(i);
+            }
+            if (flowAcc[i] > maxAcc) {
+                maxAcc = flowAcc[i];
+                maxAccIdx = i;
+            }
+        }
+
+        // 5. Trace longest river (from max accumulation point upstream)
+        const longestRiver = [];
+        // Find the source: trace upstream from max accumulation
+        // Actually, trace the longest path that leads TO maxAccIdx
+        // We'll trace from the farthest source to the outlet
+
+        // Find all sources (headwaters) that flow into the main river
+        function traceUpstream(startIdx) {
+            let current = startIdx;
+            const path = [current];
+            const visited = new Set([current]);
+
+            // Go upstream: find which neighbors flow INTO current
+            while (true) {
+                const r = Math.floor(current / w), c = current % w;
+                let bestUpstream = -1;
+                let bestAcc = 0;
+
+                for (let d = 0; d < 8; d++) {
+                    const nr = r + dy[d], nc = c + dx[d];
+                    if (nr < 0 || nr >= h || nc < 0 || nc >= w) continue;
+                    const nIdx = nr * w + nc;
+                    if (visited.has(nIdx)) continue;
+
+                    // Check if this neighbor flows into current
+                    const nDir = flowDir[nIdx];
+                    if (nDir < 0) continue;
+                    const tnr = nr + dy[nDir], tnc = nc + dx[nDir];
+                    if (tnr === r && tnc === c) {
+                        if (flowAcc[nIdx] > bestAcc) {
+                            bestAcc = flowAcc[nIdx];
+                            bestUpstream = nIdx;
+                        }
+                    }
+                }
+
+                if (bestUpstream === -1) break;
+                path.push(bestUpstream);
+                visited.add(bestUpstream);
+                current = bestUpstream;
+            }
+            return path;
+        }
+
+        // Trace downstream from max acc to outlet
+        function traceDownstream(startIdx) {
+            const path = [startIdx];
+            let current = startIdx;
+            const visited = new Set([current]);
+            while (true) {
+                const dir = flowDir[current];
+                if (dir < 0) break;
+                const r = Math.floor(current / w), c = current % w;
+                const nr = r + dy[dir], nc = c + dx[dir];
+                if (nr < 0 || nr >= h || nc < 0 || nc >= w) break;
+                const nIdx = nr * w + nc;
+                if (visited.has(nIdx)) break;
+                path.push(nIdx);
+                visited.add(nIdx);
+                current = nIdx;
+            }
+            return path;
+        }
+
+        const upstream = traceUpstream(maxAccIdx).reverse();
+        const downstream = traceDownstream(maxAccIdx);
+        const fullRiver = [...upstream, ...downstream.slice(1)];
+
+        // Convert to latlng
+        const riverLatLngs = fullRiver.map(idx => {
+            const r = Math.floor(idx / w), c = idx % w;
+            const lat = bounds.north - (r / (h - 1)) * (bounds.north - bounds.south);
+            const lng = bounds.west + (c / (w - 1)) * (bounds.east - bounds.west);
+            return [lat, lng];
+        });
+
+        // Calculate river length
+        let riverLength = 0;
+        for (let i = 1; i < riverLatLngs.length; i++) {
+            riverLength += haversine(riverLatLngs[i - 1][0], riverLatLngs[i - 1][1], riverLatLngs[i][0], riverLatLngs[i][1]);
+        }
+
+        // Draw flow on canvas
+        syncCanvas();
+        drawFlowOnCanvas();
+
+        // Draw longest river as polyline
+        if (riverLatLngs.length > 2) {
+            const line = L.polyline(riverLatLngs, {
+                color: '#ff6b6b', weight: 3.5, opacity: 0.9,
+                dashArray: null, lineCap: 'round', lineJoin: 'round'
+            }).addTo(map);
+            line.bindPopup(`<div style="text-align:center;font-family:Cairo;"><div style="font-size:14px;font-weight:700;color:#ff6b6b;">أطول نهر افتراضي</div><div style="font-family:'JetBrains Mono';font-size:18px;color:#ff6b6b;">${riverLength.toFixed(2)} كم</div></div>`, { className: 'custom-popup' });
+            riverLayers.push(line);
+        }
+
+        // Source and mouth markers
+        if (riverLatLngs.length > 2) {
+            const src = L.circleMarker(riverLatLngs[0], { radius: 6, fillColor: '#90e0ef', fillOpacity: 1, color: 'white', weight: 2 }).addTo(map);
+            src.bindPopup('<div style="text-align:center;font-family:Cairo;font-size:12px;color:#90e0ef;font-weight:700;">منبع النهر</div>', { className: 'custom-popup' });
+            const mouth = L.circleMarker(riverLatLngs[riverLatLngs.length - 1], { radius: 6, fillColor: '#0077b6', fillOpacity: 1, color: 'white', weight: 2 }).addTo(map);
+            mouth.bindPopup('<div style="text-align:center;font-family:Cairo;font-size:12px;color:#0077b6;font-weight:700;">مصب النهر</div>', { className: 'custom-popup' });
+            riverLayers.push(src, mouth);
+        }
+
+        // Update results
+        const gLink = (lat, lng) => `https://www.google.com/maps?q=${lat},${lng}&z=15`;
+        const existingResults = document.getElementById('resultsBox').innerHTML;
+
+        const riverStart = riverLatLngs[0] || [0, 0];
+        const riverEnd = riverLatLngs[riverLatLngs.length - 1] || [0, 0];
+
+        document.getElementById('resultsBox').innerHTML = existingResults + `
+            <div class="res-card river">
+                <div class="res-head"><span class="icon">🌊</span><span class="label">أطول نهر افتراضي</span></div>
+                <div class="res-big">${riverLength.toFixed(2)} <span class="res-unit">كم</span></div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;">
+                    <a href="${gLink(riverStart[0], riverStart[1])}" target="_blank" class="gmaps">💧 المنبع</a>
+                    <a href="${gLink(riverEnd[0], riverEnd[1])}" target="_blank" class="gmaps">🌊 المصب</a>
+                </div>
+            </div>
+            <div class="stats-row">
+                <div class="stat-box"><div class="stat-num" style="color:var(--water);">${riverCells.length}</div><div class="stat-lbl">خلايا نهرية</div></div>
+                <div class="stat-box"><div class="stat-num" style="color:var(--water);">${fullRiver.length}</div><div class="stat-lbl">طول المسار</div></div>
+                <div class="stat-box"><div class="stat-num" style="color:var(--water);">${maxAcc.toFixed(0)}</div><div class="stat-lbl">أقصى تجمع</div></div>
+                <div class="stat-box"><div class="stat-num" style="color:var(--water);">${flowThreshold}</div><div class="stat-lbl">حد الأنهار</div></div>
+            </div>
+        `;
+
+        btn.disabled = false;
+        btn.innerHTML = '🌊 محاكاة جريان المياه';
+    }, 50);
+}
+
+function drawFlowOnCanvas() {
+    if (!elevationData || !elevationData.flowAcc) return;
+    const canvas = document.getElementById('flowCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const { width: w, height: h, flowAcc, bounds } = elevationData;
+
+    // Find max acc for normalization
+    let maxA = 0;
+    for (let i = 0; i < flowAcc.length; i++) {
+        if (flowAcc[i] > maxA) maxA = flowAcc[i];
+    }
+
+    const logMax = Math.log(maxA + 1);
+
+    for (let row = 0; row < h; row++) {
+        for (let col = 0; col < w; col++) {
+            const acc = flowAcc[row * w + col];
+            if (acc < flowThreshold) continue;
+
+            const lat = bounds.north - (row / (h - 1)) * (bounds.north - bounds.south);
+            const lng = bounds.west + (col / (w - 1)) * (bounds.east - bounds.west);
+
+            const point = map.latLngToContainerPoint([lat, lng]);
+            if (point.x < 0 || point.y < 0 || point.x > canvas.width || point.y > canvas.height) continue;
+
+            const intensity = Math.log(acc + 1) / logMax;
+            const alpha = 0.15 + intensity * 0.7;
+            const size = 1 + intensity * 3;
+
+            ctx.fillStyle = `rgba(0, 180, 216, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+}
+
+// ==================== HELPERS ====================
+function elevColor(elev, min, max) {
+    const ratio = (elev - min) / (max - min || 1);
+    if (ratio < 0.25) return `rgb(${68 + 187 * (ratio / 0.25)}, ${71 + 100 * (ratio / 0.25)}, ${87 - 87 * (ratio / 0.25)})`;
+    if (ratio < 0.5) { const t = (ratio - 0.25) / 0.25; return `rgb(255, ${171 + 44 * t}, 0)`; }
+    if (ratio < 0.75) { const t = (ratio - 0.5) / 0.25; return `rgb(${255 - 255 * t}, ${215 + 14 * t}, ${160 * t})`; }
+    const t = (ratio - 0.75) / 0.25;
+    return `rgb(${Math.round(t * 200)}, 229, ${160 + 96 * t})`;
+}
+
+function makeIcon(color, ch) {
+    return L.divIcon({
+        html: `<div style="background:${color};color:#0a1020;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:bold;box-shadow:0 0 20px ${color}80;border:2px solid white;">${ch}</div>`,
+        iconSize: [34, 34], iconAnchor: [17, 17], className: ''
+    });
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ==================== INIT ====================
+initMap();
+// Fix map size after layout settles
+setTimeout(() => { map.invalidateSize(); syncCanvas(); }, 200);
+</script>
+</body>
+</html>
